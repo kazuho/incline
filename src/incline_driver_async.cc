@@ -6,6 +6,12 @@
 
 using namespace std;
 
+incline_def*
+incline_driver_async::create_def() const
+{
+  return new incline_def_async();
+}
+
 vector<string>
 incline_driver_async::_build_insert_from_def(const incline_def* _def,
 					     const string& src_table,

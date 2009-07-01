@@ -6,6 +6,12 @@
 
 using namespace std;
 
+incline_def*
+incline_driver_async_qtable::create_def() const
+{
+  return new incline_def_async_qtable();
+}
+
 string
 incline_driver_async_qtable::create_table_of(const incline_def* _def,
 					     tmd::conn_t& dbh) const

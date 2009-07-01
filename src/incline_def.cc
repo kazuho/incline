@@ -122,7 +122,8 @@ incline_def::parse(const picojson::value& def)
 	 = def.get<picojson::object>().begin();
        oi != def.get<picojson::object>().end();
        ++oi) {
-    if (! incline::is_one_of("destination\0pk_columns\0npk_columns\0merge\0",
+    if (! incline::is_one_of("destination\0source\0pk_columns\0npk_columns\0"
+			     "merge\0",
 			     oi->first)) {
       string err = do_parse_property(oi->first, oi->second);
       if (! err.empty()) {
@@ -131,6 +132,12 @@ incline_def::parse(const picojson::value& def)
     }
   }
   return string();
+}
+
+string
+incline_def::do_parse_property(const string& name, const picojson::value&)
+{
+  return "unknown property:" + name;
 }
 
 string

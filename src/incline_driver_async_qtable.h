@@ -7,6 +7,7 @@ class tmd::conn_t;
 
 class incline_driver_async_qtable : public incline_driver_async {
 public:
+  virtual incline_def* create_def() const;
   std::string create_table_of(const incline_def* def, tmd::conn_t& dbh) const;
   std::string drop_table_of(const incline_def* def, bool if_exists) const;
 protected:

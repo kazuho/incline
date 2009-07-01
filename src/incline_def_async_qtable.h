@@ -4,12 +4,15 @@
 #include "incline_def_async.h"
 
 class incline_def_async_qtable : public incline_def_async {
+public:
+  typedef incline_def_async super;
 protected:
   std::string queue_table_;
 public:
-  std::string queue_table() const {
-    return queue_table_.empty() ? "_CQ_" + destination_ : queue_table_;
-  }
+  std::string queue_table() const { return queue_table_; }
+  virtual std::string parse(const picojson::value& def);
+protected:
+  virtual std::string do_parse_property(const std::string& name, const picojson::value& value);
 };
 
 #endif
