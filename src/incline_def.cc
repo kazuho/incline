@@ -1,4 +1,5 @@
 #include <assert.h>
+#include "incline.h"
 #include "incline_def.h"
 
 using namespace std;
@@ -71,40 +72,85 @@ incline_def::parse(const picojson::value& def)
   } else {
     return "no destination";
   }
-  // get source
-  picojson::value src = def.get("source");
-  if (src.is<std::string>()) {
-    source_.push_back(src.get<std::string>());
-  } else if (src.is<picojson::array>()) {
-    for (picojson::array::const_iterator si(src.get<picojson::array>().begin());
-	 si != src.get<picojson::array>().end();
-	 ++si) {
-      source_.push_back(si->to_str());
+  { // get source
+    picojson::value src = def.get("source");
+    if (src.is<std::string>()) {
+      source_.push_back(src.get<std::string>());
+    } else if (src.is<picojson::array>()) {
+      for (picojson::array::const_iterator si
+	     = src.get<picojson::array>().begin();
+	   si != src.get<picojson::array>().end();
+	   ++si) {
+	source_.push_back(si->to_str());
+      }
+    } else {
+      return "no source (of type string or array)";
     }
-  } else {
-    return "no source (of type string or array)";
   }
-  // get pk_columns
-  picojson::value pkc = def.get("pk_columns");
-  if (! pkc.is<picojson::object>()) {
-    return "no pk_columns (of type object)";
+  { // get pk_columns
+    string err;
+    if (! (err = _parse_columns(def, "pk_columns", pk_columns_)).empty()) {
+      return err;
+    }
+    // get npk_columns
+    if (! (err = _parse_columns(def, "npk_columns", npk_columns_)).empty()) {
+      return err;
+    }
   }
-  for (picojson::object::const_iterator pi(pkc.get<picojson::object>().begin());
-       pi != pkc.get<picojson::object>().end();
-       ++pi) {
-    pk_columns_[pi->first] = pi->second.to_str();
+  // get merge
+  if (picojson::value merge = def.get("merge")) {
+    if (! merge.is<picojson::object>()) {
+      return "merge should be of type object";
+    }
+    for (picojson::object::const_iterator mi
+	   = merge.get<picojson::object>().begin();
+	 mi != merge.get<picojson::object>().end();
+	 ++mi) {
+      string l(mi->first), r(mi->second.to_str());
+      if (! is_dependent_of(table_of_column(l))) {
+	return string("table of ") + l + " not in source";
+      } else if (! is_dependent_of(table_of_column(r))) {
+	return string("table of ") + r + " not in source";
+      }
+      merge_.push_back(make_pair(l, r));
+    }
   }
-  // get npk_columns
-  picojson::value npc = def.get("npk_columns");
-  if (! npc.is<picojson::object>()) {
-    return "no pk_columns (of type object)";
+  // build other props
+  _rebuild_columns();
+  // parse other attributes
+  for (picojson::object::const_iterator oi
+	 = def.get<picojson::object>().begin();
+       oi != def.get<picojson::object>().end();
+       ++oi) {
+    if (! incline::is_one_of("destination\0pk_columns\0npk_columns\0merge\0",
+			     oi->first)) {
+      string err = do_parse_property(oi->first, oi->second);
+      if (! err.empty()) {
+	return err;
+      }
+    }
   }
-  for (picojson::object::const_iterator ni(npc.get<picojson::object>().begin());
-       ni != npc.get<picojson::object>().end();
-       ++ni) {
-    npk_columns_[ni->first] = ni->second.to_str();
+  return string();
+}
+
+string
+incline_def::_parse_columns(const picojson::value& def,
+			    const string& property,
+			    map<string, string>& columns)
+{
+  picojson::value cols = def.get(property);
+  if (! cols.is<picojson::object>()) {
+    return string("no ") + property + " (of type object)";
   }
-  // TODO parse other attributes
+  for (picojson::object::const_iterator ci
+	 = cols.get<picojson::object>().begin();
+       ci != cols.get<picojson::object>().end();
+       ++ci) {
+    if (! is_dependent_of(table_of_column(ci->first))) {
+      return string("table of ") + ci->first + " not in source";
+    }
+    columns[ci->first] = ci->second.to_str();
+  }
   return string();
 }
 

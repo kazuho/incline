@@ -37,6 +37,7 @@ public:
   virtual std::string parse(const picojson::value& def);
 protected:
   virtual std::string do_parse_property(const std::string& name, const picojson::value& value) const;
+  std::string _parse_columns(const picojson::value& def, const std::string& property, std::map<std::string, std::string>& columns);
   void _rebuild_columns();
 public:
   static std::string table_of_column(const std::string& column);

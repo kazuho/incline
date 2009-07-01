@@ -1,6 +1,7 @@
 #ifndef incline_h
 #define incline_h
 
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -33,6 +34,17 @@ struct incline {
 	 ++si) {
       target.push_back(prefix + *si);
     }
+  }
+  static bool is_one_of(const char* dnt, const char* cmp) {
+    for (; *dnt != '\0'; dnt += strlen(dnt) + 1) {
+      if (strcmp(dnt, cmp) == 0) {
+	return true;
+      }
+    }
+    return false;
+  }
+  static bool is_one_of(const char* dnt, const std::string& s) {
+    return is_one_of(dnt, s.c_str());
   }
 };
 
