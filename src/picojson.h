@@ -38,13 +38,7 @@ namespace picojson {
     value(int type);
     ~value();
     value(const value& x);
-    value& operator=(const value& x) {
-      if (this != &x) {
-	this->~value();
-	new (this) value(x);
-      }
-      return *this;
-    }
+    value& operator=(const value& x);
     template <typename T> bool is() const;
     template <typename T> const T& get() const;
     template <typename T> T& get();
@@ -88,6 +82,14 @@ namespace picojson {
 #undef INIT
     default: break;
     }
+  }
+  
+  inline value& value::operator=(const value& x) {
+    if (this != &x) {
+      this->~value();
+      new (this) value(x);
+    }
+    return *this;
   }
   
 #define IS(ctype, jtype)			     \
