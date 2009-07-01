@@ -112,6 +112,9 @@ namespace picojson {
 #define GET(ctype, jtype)				      \
   template <> inline const ctype& value::get<ctype>() const { \
     return jtype##_;					      \
+  }							      \
+  template <> inline ctype& value::get<ctype>() {	      \
+    return jtype##_;					      \
   }
   GET(bool, boolean)
   GET(int, integer)

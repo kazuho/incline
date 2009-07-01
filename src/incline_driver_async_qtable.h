@@ -3,7 +3,9 @@
 
 #include "incline_driver_async.h"
 
-class tmd::conn_t;
+namespace tmd {
+  class conn_t;
+}
 
 class incline_driver_async_qtable : public incline_driver_async {
 public:
