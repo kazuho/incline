@@ -12,4 +12,7 @@ AC_PROG_LIBTOOL
 LIBTOOL="$LIBTOOL --preserve-dup-deps"
 AC_SUBST(LIBTOOL)
 
+CFLAGS="$CFLAGS -Wall"
+CXXFLAGS="$CXXFLAGS -Wall"
+
 AC_OUTPUT(Makefile src/Makefile)

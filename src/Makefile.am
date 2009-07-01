@@ -1,2 +1,2 @@
-bin_PROGRAMS=	incline
-incline_SOURCES=	incline_def.cc
+bin_PROGRAMS=    incline
+incline_SOURCES= incline_def.cc incline_def_async.cc incline_mgr.cc incline_driver_standalone.cc incline_driver_async.cc
