@@ -51,11 +51,11 @@ incline_driver_async_qtable::drop_table_of(const incline_def* _def,
 }
 
 vector<string>
-incline_driver_async_qtable::build_enqueue_sql(const incline_def* def,
-					       const map<string, string>&
-					       pk_columns,
-					       const vector<string>& tables,
-					       const vector<string>& cond)
+incline_driver_async_qtable::do_build_enqueue_sql(const incline_def* def,
+						  const map<string, string>&
+						  pk_columns,
+						  const vector<string>& tables,
+						  const vector<string>& cond)
   const
 {
   vector<string> src_cols, dest_cols;

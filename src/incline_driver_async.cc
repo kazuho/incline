@@ -145,5 +145,5 @@ incline_driver_async::_build_enqueue_sql(const incline_def_async* def,
   }
   vector<string> cond(_cond);
   incline::push_back(cond, def->build_merge_cond(src_table, alias, true));
-  return build_enqueue_sql(def, pk_columns, tables, cond);
+  return do_build_enqueue_sql(def, pk_columns, tables, cond);
 }
