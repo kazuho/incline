@@ -142,7 +142,7 @@ namespace picojson {
   }
   
   inline const value& value::get(const std::string& key) const {
-    static value s_undefined(undefined_type); // move inside a template?
+    static value s_undefined(undefined_type);
     assert(is<object>());
     object::const_iterator i = object_->find(key);
     return i != object_->end() ? i->second : s_undefined;
