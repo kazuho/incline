@@ -24,16 +24,16 @@ namespace picojson {
   
   class value {
   public:
-    typedef std::vector<value> value_array;
-    typedef std::map<std::string, value> value_object;
+    typedef std::vector<value> array;
+    typedef std::map<std::string, value> object;
   protected:
     int type_;
     union {
       bool boolean_;
       int integer_;
       std::string* string_;
-      value_array* array_;
-      value_object* object_;
+      array* array_;
+      object* object_;
     };
   public:
     value(int type);
@@ -48,8 +48,8 @@ namespace picojson {
     std::string to_str() const;
   };
   
-  typedef value::value_array array;
-  typedef value::value_object object;
+  typedef value::array array;
+  typedef value::object object;
   
   inline value::value(int type) : type_(type) {
     switch (type) {
@@ -57,8 +57,8 @@ namespace picojson {
       INIT(boolean_, false);
       INIT(integer_, 0);
       INIT(string_, new std::string());
-      INIT(array_, new value_array());
-      INIT(object_, new value_object());
+      INIT(array_, new array());
+      INIT(object_, new object());
 #undef INIT
     default: break;
     }
@@ -81,8 +81,8 @@ namespace picojson {
       INIT(boolean_, x.boolean_);
       INIT(integer_, x.integer_);
       INIT(string_, new std::string(*x.string_));
-      INIT(array_, new value_array(*x.array_));
-      INIT(object_, new value_object(*x.object_));
+      INIT(array_, new array(*x.array_));
+      INIT(object_, new object(*x.object_));
 #undef INIT
     default: break;
     }
