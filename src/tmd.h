@@ -1,0 +1,219 @@
+/* Copyright 2008-2009 Cybozu Labs, Inc.
+ * Distributed under the New BSD License (see LICENSE file)
+ */
+
+#ifndef tmd_H
+#define tmd_H
+
+extern "C" {
+#include <assert.h>
+#include <stdarg.h>
+#include <mysql.h>
+}
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+namespace tmd {
+  
+  std::string ssprintf(const char* fmt, ...) __attribute__((__format__(__printf__, 1, 2)));
+  inline std::string ssprintf(const char* fmt, ...)
+  {
+    char buf[4096];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    return buf;
+  }    
+  
+  class error_t : public std::domain_error {
+  public:
+    error_t(const std::string& s) : std::domain_error(s) {
+      fprintf(stderr, "%s\n", s.c_str());
+    }
+  };
+  
+  inline std::string getenvif(const std::string& name, const std::string& defval)
+  {
+    const char* s;
+    if ((s = getenv(name.c_str())) != NULL) {
+      return s;
+    }
+    return defval;
+  }
+  
+  inline int getenvif(const std::string& name, int defval)
+  {
+    const char* s;
+    if ((s = getenv(name.c_str())) != NULL) {
+      int v;
+      if (sscanf(s, "%d", &v) != 1) {
+	throw error_t(ssprintf("failed to parse environment variable %s=%s as a number\n.",
+			       name.c_str(), s));
+      }
+      return v;
+    }
+    return defval;
+  }
+  
+  inline std::string getline(FILE* fp)
+  {
+    char buf[16384];
+    if (fgets(buf, sizeof(buf), fp) == NULL) {
+      return std::string();
+    }
+    size_t l = strlen(buf);
+    if (l != 0 && buf[l - 1] == '\n') {
+      buf[--l] = '\0';
+    }
+    return buf;
+  }
+  
+  inline std::vector<std::string> split(const char* str, int delimiter, size_t n)
+  {
+    std::vector<std::string> arr;
+    while (arr.size() + 1 < n) {
+      const char* d = strchr(str, delimiter);
+      if (d == NULL) {
+	break;
+      }
+      arr.push_back(std::string(str, d));
+      str = d + 1;
+    }
+    arr.push_back(str);
+    return arr;
+  }
+  
+  template<typename It> std::string join(const It& first, const It& last, const std::string& delimiter)
+  {
+    std::string out;
+    for (It i = first; i != last; ++i) {
+      if (i != first) {
+	out += delimiter;
+      }
+      out += *i;
+    }
+    return out;
+  }
+  
+#define TMD_STR2X(suffix, type)						\
+  inline unsigned str2##suffix(const char *s) {				\
+    type v;								\
+    int r = sscanf(s, "%" #suffix, &v);					\
+    assert(r == 1);							\
+    return v;								\
+  }
+  TMD_STR2X(u, unsigned)
+  TMD_STR2X(d, int)
+#undef TMD_STR2X
+  
+#define TMD_X2STR(suffix, type)		\
+  inline std::string suffix##2str(type v) {	\
+    char buf[32];			\
+    sprintf(buf, "%" #suffix, v);	\
+    return buf;				\
+  }
+  TMD_X2STR(u, unsigned)
+  TMD_X2STR(d, int)
+#undef TMD_X2STR
+
+  inline std::string escape(MYSQL* mysql, const std::string& s)
+  {
+    char* buf = new char[s.size() * 2 + 1];
+    mysql_real_escape_string(mysql, buf, s.c_str(), s.size());
+    std::string r(buf);
+    delete [] buf;
+    return r;
+  }
+  
+  inline void vexecute(MYSQL* mysql, const char* fmt, va_list args)
+  {
+    char sql[10240];
+    vsprintf(sql, fmt, args);
+    int ret = mysql_query(mysql, sql);
+    if (ret != 0) {
+      throw error_t(ssprintf("mysql error:%d for sql: %s\n", ret, sql));
+    }
+  }
+  
+  void execute(MYSQL* mysql, const char* fmt, ...)
+    __attribute__((__format__(__printf__, 2, 3)));
+  inline void execute(MYSQL* mysql, const char* fmt, ...)
+  {
+    va_list args;
+    va_start(args, fmt);
+    vexecute(mysql, fmt, args);
+    va_end(args);
+  }
+  
+  class query_t {
+  protected:
+    MYSQL_RES* res_;
+    MYSQL_ROW row_;
+    unsigned long* lengths_;
+  public:
+    query_t(MYSQL* mysql, const char* fmt, ...)
+    __attribute__((__format__(__printf__, 3, 4)))
+    : row_(NULL), lengths_(NULL) {
+      va_list args;
+      va_start(args, fmt);
+      vexecute(mysql, fmt, args);
+      va_end(args);
+      res_ = mysql_store_result(mysql);
+      assert(res_ != NULL);
+    }
+    ~query_t() { mysql_free_result(res_); }
+    query_t& fetch() {
+      row_ = mysql_fetch_row(res_);
+      lengths_ = mysql_fetch_lengths(res_);
+      return *this;
+    }
+    bool eof() const { return row_ == NULL; }
+    const char* field(size_t idx) { return row_[idx]; }
+    unsigned long field_length(size_t idx) { return lengths_[idx]; }
+  private:
+    query_t(const query_t&);
+    query_t& operator=(const query_t&);
+  };
+  
+  class conn_t {
+  protected:
+    MYSQL* conn_;
+    std::string host_;
+    std::string user_;
+    std::string password_;
+    std::string database_;
+    unsigned short port_;
+  public:
+    conn_t(const std::string& host, const std::string& user, const std::string& password,
+	      const std::string& database, unsigned short port)
+      : conn_(NULL), host_(host), user_(user), password_(password),
+	database_(database), port_(port)
+    {}
+    ~conn_t() {
+      if (conn_ != NULL) {
+	mysql_close(conn_);
+      }
+    }
+    operator MYSQL*() {
+      if (conn_ == NULL) {
+	conn_ = mysql_init(NULL);
+	assert(conn_ != NULL);
+	if (mysql_real_connect(conn_, host_.c_str(), user_.c_str(),
+			       password_.c_str(), database_.c_str(), port_,
+			       NULL, 0)
+	    == NULL) {
+	  throw error_t(ssprintf("failed to connect to mysql:%s:user=%s;host=%s;port=%hu\n",
+				 database_.c_str(),
+				 user_.c_str(),
+				 host_.c_str(),
+				 port_));
+	}
+      }
+      return conn_;
+    }
+  };
+
+}
+
+#endif

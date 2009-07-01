@@ -8,7 +8,6 @@ protected:
   std::string direct_expr_column_;
   std::string direct_expr_base_;
 public:
-  virtual ~incline_def_async() {}
   std::string direct_expr_column() const { return direct_expr_column_; }
   std::string direct_expr(const std::string& col_expr) const;
 };
