@@ -44,6 +44,9 @@ namespace picojson {
     template <typename T> T& get();
   };
   
+  typedef value::value_array array;
+  typedef value::value_object object;
+  
   inline value::value(int type) : type_(type) {
     switch (type) {
 #define INIT(p, v) case p##type: p = v; break
@@ -56,9 +59,6 @@ namespace picojson {
     default: break;
     }
   }
-  
-  typedef value::value_array array;
-  typedef value::value_object object;
   
   inline value::~value() {
     switch (type_) {
