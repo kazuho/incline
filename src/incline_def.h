@@ -24,6 +24,7 @@ protected:
 public:
   virtual ~incline_def() {}
   // use default copy functions
+  // accessors
   std::string destination() const { return destination_; }
   const std::vector<std::string>& source() const { return source_; }
   const std::map<std::string, std::string>& pk_columns() const { return pk_columns_; }
@@ -34,8 +35,10 @@ public:
   bool is_master_of(const std::string& table) const;
   bool is_dependent_of(const std::string& table) const;
   std::vector<std::string> build_merge_cond(const std::string& tbl_rewrite_from, const std::string& tbl_rewrite_to, bool master_only = false) const;
-  // TODO cerate parser
+  // parser
+  virtual std::string parse(const std::map<std::string>& def) const;
 protected:
+  virtual std::string do_parse_property(const std::string& name, const std::string& value) const;
   void _rebuild_columns();
 public:
   static std::string table_of_column(const std::string& column);
