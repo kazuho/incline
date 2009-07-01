@@ -59,6 +59,55 @@ incline_def::build_merge_cond(const string& tbl_rewrite_from,
   return cond;
 }
 
+string
+incline_def::parse(const picojson::value& def)
+{
+  if (! def.is<picojson::object>()) {
+    return "definition should be an object";
+  }
+  // get destination
+  if (picojson::value d = def.get("destination")) {
+    destination_ = d.to_str();
+  } else {
+    return "no destination";
+  }
+  // get source
+  picojson::value src = def.get("source");
+  if (src.is<std::string>()) {
+    source_.push_back(src.get<std::string>());
+  } else if (src.is<picojson::array>()) {
+    for (picojson::array::const_iterator si(src.get<picojson::array>().begin());
+	 si != src.get<picojson::array>().end();
+	 ++si) {
+      source_.push_back(si->to_str());
+    }
+  } else {
+    return "no source (of type string or array)";
+  }
+  // get pk_columns
+  picojson::value pkc = def.get("pk_columns");
+  if (! pkc.is<picojson::object>()) {
+    return "no pk_columns (of type object)";
+  }
+  for (picojson::object::const_iterator pi(pkc.get<picojson::object>().begin());
+       pi != pkc.get<picojson::object>().end();
+       ++pi) {
+    pk_columns_[pi->first] = pi->second.to_str();
+  }
+  // get npk_columns
+  picojson::value npc = def.get("npk_columns");
+  if (! npc.is<picojson::object>()) {
+    return "no pk_columns (of type object)";
+  }
+  for (picojson::object::const_iterator ni(npc.get<picojson::object>().begin());
+       ni != npc.get<picojson::object>().end();
+       ++ni) {
+    npk_columns_[ni->first] = ni->second.to_str();
+  }
+  // TODO parse other attributes
+  return string();
+}
+
 void
 incline_def::_rebuild_columns()
 {

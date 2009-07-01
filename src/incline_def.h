@@ -1,9 +1,7 @@
 #ifndef incline_def_h
 #define incline_def_h
 
-#include <string>
-#include <map>
-#include <vector>
+#include "picojson.h"
 
 class incline_def {
 protected:
@@ -36,9 +34,9 @@ public:
   bool is_dependent_of(const std::string& table) const;
   std::vector<std::string> build_merge_cond(const std::string& tbl_rewrite_from, const std::string& tbl_rewrite_to, bool master_only = false) const;
   // parser
-  virtual std::string parse(const std::map<std::string>& def) const;
+  virtual std::string parse(const picojson::value& def);
 protected:
-  virtual std::string do_parse_property(const std::string& name, const std::string& value) const;
+  virtual std::string do_parse_property(const std::string& name, const picojson::value& value) const;
   void _rebuild_columns();
 public:
   static std::string table_of_column(const std::string& column);
