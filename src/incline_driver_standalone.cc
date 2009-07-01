@@ -1,6 +1,6 @@
-#include "incline.h"
 #include "incline_mgr.h"
 #include "incline_driver_standalone.h"
+#include "incline_util.h"
 
 using namespace std;
 
@@ -13,8 +13,8 @@ incline_driver_standalone::insert_trigger_of(const string& src_table) const
        ++di) {
     const incline_def* def = *di;
     if (def->is_master_of(src_table)) {
-      incline::push_back(body,
-			 _build_insert_from_def(def, src_table, "INSERT"));
+      incline_util::push_back(body,
+			      _build_insert_from_def(def, src_table, "INSERT"));
     }
   }
   return mgr_->build_trigger_stmt("INSERT", src_table, body);
@@ -30,10 +30,12 @@ incline_driver_standalone::update_trigger_of(const string& src_table) const
     const incline_def* def = *di;
     if (def->is_dependent_of(src_table)) {
       if (def->is_master_of(src_table)) {
-	incline::push_back(body,
-			   _build_insert_from_def(def, src_table, "REPLACE"));
+	incline_util::push_back(body,
+				_build_insert_from_def(def, src_table,
+						       "REPLACE"));
       } else {
-	incline::push_back(body, _build_update_merge_from_def(def, src_table));
+	incline_util::push_back(body,
+				_build_update_merge_from_def(def, src_table));
       }
     }
   }
@@ -49,7 +51,7 @@ incline_driver_standalone::delete_trigger_of(const string& src_table) const
        ++di) {
     const incline_def* def = *di;
     if (def->is_master_of(src_table)) {
-      incline::push_back(body, _build_delete_from_def(def, src_table));
+      incline_util::push_back(body, _build_delete_from_def(def, src_table));
     }
   }
   return mgr_->build_trigger_stmt("DELETE", src_table, body);
@@ -73,8 +75,8 @@ incline_driver_standalone::_build_insert_from_def(const incline_def* def,
     dest_cols.push_back(ci->second);
   }
   string sql = command + " INTO " + def->destination() + "(" +
-    incline::join(',', dest_cols.begin(), dest_cols.end()) + ") SELECT " +
-    incline::join(',', src_cols.begin(), src_cols.end());
+    incline_util::join(',', dest_cols.begin(), dest_cols.end()) + ") SELECT " +
+    incline_util::join(',', src_cols.begin(), src_cols.end());
   if (def->source().size() > 1) {
     vector<string> join_tables;
     for (vector<string>::const_iterator si = def->source().begin();
@@ -85,13 +87,15 @@ incline_driver_standalone::_build_insert_from_def(const incline_def* def,
       }
     }
     sql += string(" FROM ")
-      + incline::join(" INNER JOIN ", join_tables.begin(), join_tables.end());
-    incline::push_back(cond, def->build_merge_cond(src_table, "NEW"));
+      + incline_util::join(" INNER JOIN ", join_tables.begin(),
+			   join_tables.end());
+    incline_util::push_back(cond, def->build_merge_cond(src_table, "NEW"));
   }
   if (! cond.empty()) {
-    sql += string(" WHERE ") + incline::join(" AND ", cond.begin(), cond.end());
+    sql += string(" WHERE ")
+      + incline_util::join(" AND ", cond.begin(), cond.end());
   }
-  return incline::vectorize(sql);
+  return incline_util::vectorize(sql);
 }
 
 vector<string>
@@ -110,8 +114,8 @@ incline_driver_standalone::_build_delete_from_def(const incline_def* def,
     }
   }
   string sql = string("DELETE FROM ") + def->destination() + " WHERE "
-    + incline::join(" AND ", cond.begin(), cond.end());
-  return incline::vectorize(sql);
+    + incline_util::join(" AND ", cond.begin(), cond.end());
+  return incline_util::vectorize(sql);
 }
 
 vector<string>
@@ -129,11 +133,11 @@ incline_driver_standalone::_build_update_merge_from_def(const incline_def* def,
 		     + ci->first.substr(src_table.size() + 1));
     }
   }
-  incline::push_back(cond, _merge_cond_of(def, src_table));
+  incline_util::push_back(cond, _merge_cond_of(def, src_table));
   string sql = string("UPDATE ") + def->destination() + " SET "
-    + incline::join(',', set_expr.begin(), set_expr.end()) + " WHERE "
-    + incline::join(" AND ", cond.begin(), cond.end());
-  return incline::vectorize(sql);
+    + incline_util::join(',', set_expr.begin(), set_expr.end()) + " WHERE "
+    + incline_util::join(" AND ", cond.begin(), cond.end());
+  return incline_util::vectorize(sql);
 }
 
 vector<string>

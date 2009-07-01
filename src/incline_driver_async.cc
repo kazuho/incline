@@ -1,8 +1,8 @@
 #include <assert.h>
-#include "incline.h"
 #include "incline_def_async.h"
 #include "incline_mgr.h"
 #include "incline_driver_async.h"
+#include "incline_util.h"
 
 using namespace std;
 
@@ -27,28 +27,28 @@ incline_driver_async::_build_insert_from_def(const incline_def* _def,
 	= def->direct_expr("NEW" +
 			   def->direct_expr_column().substr(src_table.size()));
       r.push_back("IF (" + direct_expr + ") THEN");
-      incline::push_back(r,
-			 super::_build_insert_from_def(def, src_table, command,
-						       cond),
-			 "  ");
+      incline_util::push_back(r,
+			      super::_build_insert_from_def(def, src_table,
+							    command, cond),
+			      "  ");
       r.push_back("ELSE");
-      incline::push_back(r, _build_enqueue_sql(def, src_table, "NEW"), "  ");
+      incline_util::push_back(r, _build_enqueue_sql(def, src_table, "NEW"), "  ");
       r.push_back("END IF");
     } else {
       std::string direct_expr = def->direct_expr(def->direct_expr_column());
       vector<string> cond_and_dexpr(cond);
       cond_and_dexpr.push_back(direct_expr);
-      incline::push_back(r, 
+      incline_util::push_back(r, 
 			 super::_build_insert_from_def(def, src_table, command,
 						       cond_and_dexpr));
       cond_and_dexpr.pop_back();
       cond_and_dexpr.push_back("! (" +  direct_expr + ")");
-      incline::push_back(r, 
-			 _build_enqueue_sql(def, src_table, "NEW",
-					    cond_and_dexpr));
+      incline_util::push_back(r, 
+			      _build_enqueue_sql(def, src_table, "NEW",
+						 cond_and_dexpr));
     }
   } else {
-    incline::push_back(r, _build_enqueue_sql(def, src_table, "NEW", cond));
+    incline_util::push_back(r, _build_enqueue_sql(def, src_table, "NEW", cond));
   }
   return r;
 }
@@ -67,29 +67,30 @@ incline_driver_async::_build_delete_from_def(const incline_def* _def,
 	= def->direct_expr("OLD" +
 			   def->direct_expr_column().substr(src_table.size()));
       r.push_back("IF (" + direct_expr + ") THEN");
-      incline::push_back(r,
-			 super::_build_delete_from_def(def, src_table, cond),
-			 "  ");
+      incline_util::push_back(r,
+			      super::_build_delete_from_def(def, src_table,
+							    cond),
+			      "  ");
       r.push_back("ELSE");
-      incline::push_back(r,
-			 _build_enqueue_sql(def, src_table, "OLD"),
-			 "   ");
+      incline_util::push_back(r,
+			      _build_enqueue_sql(def, src_table, "OLD"),
+			      "   ");
       r.push_back("END IF");
     } else {
       std::string direct_expr = def->direct_expr(def->direct_expr_column());
       vector<string> cond_and_dexpr(cond);
       cond_and_dexpr.push_back(direct_expr);
-      incline::push_back(r,
-			 super::_build_delete_from_def(def, src_table,
-						       cond_and_dexpr));
+      incline_util::push_back(r,
+			      super::_build_delete_from_def(def, src_table,
+							    cond_and_dexpr));
       cond_and_dexpr.pop_back();
       cond_and_dexpr.push_back(string("! (") +  direct_expr + ")");
-      incline::push_back(r,
-			 _build_enqueue_sql(def, src_table, "OLD",
-					    cond_and_dexpr));
+      incline_util::push_back(r,
+			      _build_enqueue_sql(def, src_table, "OLD",
+						 cond_and_dexpr));
     }
   } else {
-    incline::push_back(r, _build_enqueue_sql(def, src_table, "OLD", cond));
+    incline_util::push_back(r, _build_enqueue_sql(def, src_table, "OLD", cond));
   }
   return r;
 }
@@ -111,16 +112,17 @@ incline_driver_async::_build_update_merge_from_def(const incline_def* _def,
 			 ->second);
     vector<string> cond_and_dexpr(cond);
     cond_and_dexpr.push_back(dest_direct_expr);
-    incline::push_back(r, 
-		       super::_build_update_merge_from_def(def, src_table,
-							   cond_and_dexpr));
+    incline_util::push_back(r, 
+			    super::_build_update_merge_from_def(def, src_table,
+								cond_and_dexpr)
+			    );
     cond_and_dexpr.pop_back();
     cond_and_dexpr.push_back(string("! (") + dest_direct_expr + ')');
-    incline::push_back(r, 
-		       _build_enqueue_sql(def, src_table, "NEW",
-					  cond_and_dexpr));
+    incline_util::push_back(r, 
+			    _build_enqueue_sql(def, src_table, "NEW",
+					       cond_and_dexpr));
   } else {
-    incline::push_back(r, _build_enqueue_sql(def, src_table, "NEW"));
+    incline_util::push_back(r, _build_enqueue_sql(def, src_table, "NEW"));
   }
   return r;
 }
@@ -150,6 +152,6 @@ incline_driver_async::_build_enqueue_sql(const incline_def_async* def,
     }
   }
   vector<string> cond(_cond);
-  incline::push_back(cond, def->build_merge_cond(src_table, alias, true));
+  incline_util::push_back(cond, def->build_merge_cond(src_table, alias, true));
   return do_build_enqueue_sql(def, pk_columns, tables, cond);
 }

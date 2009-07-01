@@ -1,11 +1,11 @@
-#ifndef incline_h
-#define incline_h
+#ifndef incline_util_h
+#define incline_util_h
 
 #include <cstring>
 #include <string>
 #include <vector>
 
-struct incline {
+struct incline_util {
   template <typename T, typename Iter> static std::string join(const T& delimiter, const Iter& first, const Iter& last) {
     std::string r;
     for (Iter i = first; i != last; ++i) {

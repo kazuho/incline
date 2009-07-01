@@ -1,6 +1,6 @@
 #include <assert.h>
-#include "incline.h"
 #include "incline_def.h"
+#include "incline_util.h"
 
 using namespace std;
 
@@ -122,9 +122,9 @@ incline_def::parse(const picojson::value& def)
 	 = def.get<picojson::object>().begin();
        oi != def.get<picojson::object>().end();
        ++oi) {
-    if (! incline::is_one_of("destination\0source\0pk_columns\0npk_columns\0"
-			     "merge\0",
-			     oi->first)) {
+    if (! incline_util::is_one_of("destination\0source\0pk_columns\0"
+				  "npk_columns\0merge\0",
+				  oi->first)) {
       string err = do_parse_property(oi->first, oi->second);
       if (! err.empty()) {
 	return err;

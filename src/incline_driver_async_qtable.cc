@@ -1,8 +1,8 @@
 #include "tmd.h"
-#include "incline.h"
 #include "incline_def_async_qtable.h"
 #include "incline_driver_async_qtable.h"
 #include "incline_mgr.h"
+#include "incline_util.h"
 
 using namespace std;
 
@@ -39,9 +39,9 @@ incline_driver_async_qtable::create_table_of(const incline_def* _def,
     pk_cols.push_back(pi->second);
   }
   return "CREATE TABLE " + def->queue_table() + " ("
-    + incline::join(',', col_defs.begin(), col_defs.end())
+    + incline_util::join(',', col_defs.begin(), col_defs.end())
     + ",cq_version INT UNSIGNED NOT NULL,PRIMARY KEY("
-    + incline::join(',', pk_cols.begin(), pk_cols.end())
+    + incline_util::join(',', pk_cols.begin(), pk_cols.end())
     + ")) ENGINE=InnoDB";
 }
 
@@ -72,16 +72,16 @@ incline_driver_async_qtable::do_build_enqueue_sql(const incline_def* def,
     dest_cols.push_back(pi->second);
   }
   string sql = string("INSERT INTO ") + def->destination() + " ("
-    + incline::join(',', dest_cols.begin(), dest_cols.end()) + ") SELECT "
-    + incline::join(',', src_cols.begin(), src_cols.end());
+    + incline_util::join(',', dest_cols.begin(), dest_cols.end()) + ") SELECT "
+    + incline_util::join(',', src_cols.begin(), src_cols.end());
   if (! tables.empty()) {
     sql += string(" FROM ")
-      + incline::join(" INNER JOIN ", tables.begin(), tables.end());
+      + incline_util::join(" INNER JOIN ", tables.begin(), tables.end());
   }
   if (! cond.empty()) {
     sql += string(" WHERE ")
-      + incline::join(" AND ", cond.begin(), cond.end());
+      + incline_util::join(" AND ", cond.begin(), cond.end());
   }
   sql += " ON DUPLICATE KEY UPDATE _cq_version=_cq_version+1";
-  return incline::vectorize(sql);
+  return incline_util::vectorize(sql);
 }
