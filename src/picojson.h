@@ -2,6 +2,7 @@
 #define picojson_h
 
 #include <cassert>
+#include <cstring>
 #include <string>
 #include <vector>
 #include <map>
@@ -12,7 +13,7 @@ namespace picojson {
     undefined_type,
     null_type,
     boolean_type,
-    integer_type,
+    number_type,
     string_type,
     array_type,
     object_type
@@ -30,7 +31,7 @@ namespace picojson {
     int type_;
     union {
       bool boolean_;
-      int integer_;
+      double number_;
       std::string* string_;
       array* array_;
       object* object_;
@@ -55,7 +56,7 @@ namespace picojson {
     switch (type) {
 #define INIT(p, v) case p##type: p = v; break
       INIT(boolean_, false);
-      INIT(integer_, 0);
+      INIT(number_, 0.0);
       INIT(string_, new std::string());
       INIT(array_, new array());
       INIT(object_, new object());
@@ -79,7 +80,7 @@ namespace picojson {
     switch (type_) {
 #define INIT(p, v) case p##type: p = v; break
       INIT(boolean_, x.boolean_);
-      INIT(integer_, x.integer_);
+      INIT(number_, x.number_);
       INIT(string_, new std::string(*x.string_));
       INIT(array_, new array(*x.array_));
       INIT(object_, new object(*x.object_));
@@ -103,24 +104,25 @@ namespace picojson {
   IS(undefined, undefined)
   IS(null, null)
   IS(bool, boolean)
-  IS(int, integer)
+  IS(int, number)
+  IS(double, number)
   IS(std::string, string)
   IS(array, array)
   IS(object, object)
 #undef IS
   
-#define GET(ctype, jtype)				      \
+#define GET(ctype, var)					      \
   template <> inline const ctype& value::get<ctype>() const { \
-    return jtype##_;					      \
+    return var;						      \
   }							      \
   template <> inline ctype& value::get<ctype>() {	      \
-    return jtype##_;					      \
+    return var;						      \
   }
-  GET(bool, boolean)
-  GET(int, integer)
-  GET(std::string, *string)
-  GET(array, *array)
-  GET(object, *object)
+  GET(bool, boolean_)
+  GET(double, number_)
+  GET(std::string, *string_)
+  GET(array, *array_)
+  GET(object, *object_)
 #undef GET
   
   inline value::operator bool() const {
@@ -130,8 +132,8 @@ namespace picojson {
       return false;
     case boolean_type:
       return boolean_;
-    case integer_type:
-      return integer_;
+    case number_type:
+      return number_;
     case string_type:
       return ! string_->empty();
     default:
@@ -151,7 +153,11 @@ namespace picojson {
     case undefined_type: return "undefined";
     case null_type:      return "null";
     case boolean_type:   return boolean_ ? "true" : "false";
-    case integer_type:   assert(0); // TODO
+    case number_type:    {
+      char buf[256];
+      snprintf(buf, sizeof(buf), "%f", number_);
+      return buf;
+    }
     case string_type:    return *string_;
     case array_type:     return "array";
     case object_type:    return "object";
