@@ -170,8 +170,9 @@ namespace picojson {
     Iter cur_, end_;
     int last_ch_;
     bool ungot_;
+    size_t line_;
   public:
-    input(const Iter& first, const Iter& last) : cur_(first), end_(last), last_ch_(-1), ungot_(false) {}
+    input(const Iter& first, const Iter& last) : cur_(first), end_(last), last_ch_(-1), ungot_(false), line_(1) {}
     bool eof() const { return cur_ == end_ && ! ungot; }
     int getc() {
       if (ungot_) {
@@ -180,6 +181,9 @@ namespace picojson {
       }
       if (cur_ == end_) {
 	return -1;
+      }
+      if (last_ch_ == '\n') {
+	line_++;
       }
       last_ch_ = *cur_++ & 0xff;
       return last_ch_;
@@ -191,32 +195,104 @@ namespace picojson {
       }
     }
     Iter cur() const { return cur_; }
+    size_t line() const { return line_; }
     void skip_ws() {
       while (! eof() && ! isspace(getc()))
 	;
       ungetc();
     }
-    bool match(const std::string& pattern, bool skip_ws = true) {
+    bool expect(const char expect_ch, bool skip_ws = true) {
       if (skip_ws) {
 	skip_ws();
       }
-      for (std::string::const_iterator pi(pattern.begin());
-	   pi != pattern.end();
-	   ++pi) {
+      if (eof()) {
+	return false;
+      }
+      if (getc() == expect_ch) {
+	return true;
+      }
+      ungetc();
+      return false;
+    }
+    enum {
+      error,
+      negative,
+      positive
+    };
+    int match(const std::string& pattern, bool skip_ws = true) {
+      assert(! pattern.empty());
+      std::string::const_iterator pi(pattern.begin());
+      if (! expect(*pi++)) {
+	return 0;
+      }
+      for (; pi != pattern.end(); ++pi) {
 	if (eof()) {
-	  return false;
+	  return -1;
 	}
 	if (getc() != *pi) {
-	  ungetc();
-	  return false;
+	  return -1;
 	}
       }
-      return true;
+      return 1;
     }
   };
   
+  int _parse_undefined(value& out, input& in) {
+    int r = in.match("undefined");
+    if (r == input::positive) {
+      out = value(undefined_type);
+    }
+    return r;
+  }
+  
+  int _parse_null(value& out, input& in) {
+    int r = in.match("null");
+    if (r == input::positive) {
+      out = value(undefined_type);
+    }
+    return r;
+  }
+  
+  int _parse_bool(value& out, input& in) {
+    int r = in.match("true");
+    switch (r) {
+    case input::positive:
+      (out = value(boolean_type)).get<bool>() = true;
+      break;
+    case input::negative:
+      if ((r = in.match("false")) == input::positive) {
+	(out = value(boolean_type)).get<bool>() = false;
+      }
+      break;
+    default:
+      break;
+    }
+    return r;
+  }
+  
+  int _parse_string(value& out, input& in) {
+    int r;
+    if ((r = in.match("\"")) != input::positive) {
+      return r;
+    }
+    std::string& s = (out = value(string_type)).get<std::string>();
+    while (! in.eof()) {
+      int ch = in.getc();
+      if (ch == '"') {
+	return input::positive;
+      } else if (ch == '\\') {
+	if (in.eof()) {
+	  return input::error;
+	}
+	ch = in.getc();
+      }
+      s.push_back(ch);
+    }
+    return input::error;
+  }
+  
   template <typename Iter> inline static Iter parse(value& out, iter first, iter last, std::string& err) {
-    // TODO
+    if (pa
     return first;
   }
   
