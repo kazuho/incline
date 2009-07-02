@@ -311,9 +311,8 @@ namespace picojson {
     std::string err;
     // do
     if (! _parse(out, in)) {
-      printf("errorrrr\n");
       char buf[64];
-      sprintf(buf, "syntax error line %d near: ", in.line());
+      sprintf(buf, "syntax error at line %d near: ", in.line());
       err = buf;
       while (! in.eof()) {
 	int ch = in.getc();
@@ -356,7 +355,7 @@ template <typename T> void is(const T& x, const T& y, const char* name = "")
 
 int main(void)
 {
-  plan(12);
+  plan(13);
   
   
 #define TEST(in, type, cmp) {						\
@@ -372,7 +371,14 @@ int main(void)
   TEST("false", bool, false);
   TEST("true", bool, true);
   TEST("\"hello\"", string, string("hello"));
-
+  
+  {
+    picojson::value v;
+    const char *s = "falsoooo";
+    string err = picojson::parse(v, s, s + strlen(s));
+    is(err, string("syntax error at line 1 near: oooo"), "error message");
+  }
+  
 #undef TEST
   
   return 0;
