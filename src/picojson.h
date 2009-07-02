@@ -252,6 +252,9 @@ namespace picojson {
   template <typename Iter> static bool _parse_array(value& out, input<Iter>& in) {
     out = value(array_type);
     array& a = out.get<array>();
+    if (in.match("]") == input<Iter>::positive) {
+      return true;
+    }
     do {
       a.push_back(value());
       if (! _parse(a.back(), in)) {
@@ -384,7 +387,7 @@ template <typename T> void is(const T& x, const T& y, const char* name = "")
 
 int main(void)
 {
-  plan(18);
+  plan(24);
   
   
 #define TEST(in, type, cmp) {						\
@@ -401,6 +404,24 @@ int main(void)
   TEST("true", bool, true);
   TEST("3.5", double, 3.5);
   TEST("\"hello\"", string, string("hello"));
+  
+  {
+    picojson::value v;
+    const char *s = "[]";
+    string err = picojson::parse(v, s, s + strlen(s));
+    ok(err.empty(), "empty array no error");
+    ok(v.is<picojson::array>(), "empty array check type");
+    ok(v.get<picojson::array>().empty(), "check empty array size");
+  }
+  
+  {
+    picojson::value v;
+    const char *s = "[1,2,3]";
+    string err = picojson::parse(v, s, s + strlen(s));
+    ok(err.empty(), "array no error");
+    ok(v.is<picojson::array>(), "array check type");
+    is(v.get<picojson::array>().size(), size_t(3), "check array size");
+  }
   
   {
     picojson::value v;
