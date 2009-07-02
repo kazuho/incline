@@ -286,7 +286,7 @@ namespace picojson {
     std::string num_str;
     while (! in.eof()) {
       int ch = in.getc();
-      if ('0' <= ch && ch < '9' || ch == '+' || ch == '-' || ch == '.'
+      if ('0' <= ch && ch <= '9' || ch == '+' || ch == '-' || ch == '.'
 	  || ch == 'e' || ch == 'E') {
 	num_str.push_back(ch);
       } else {
@@ -354,8 +354,8 @@ namespace picojson {
   }
   
   inline static std::string parse(value& out, std::istream& is) {
-    std::istream_iterator<char> ii(is);
-    return parse(out, ii, std::istream_iterator<char>());
+    std::istreambuf_iterator<char> ii(is.rdbuf());
+    return parse(out, ii, std::istreambuf_iterator<char>());
   }
   
 }
@@ -402,7 +402,7 @@ int main(void)
   
   TEST("false", bool, false);
   TEST("true", bool, true);
-  TEST("3.5", double, 3.5);
+  TEST("90.5", double, 90.5);
   TEST("\"hello\"", string, string("hello"));
   
   {
