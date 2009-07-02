@@ -164,6 +164,62 @@ namespace picojson {
     default:             assert(0);
     }
   }
+  
+  template <typename Iter> struct input {
+  protected:
+    Iter cur_, end_;
+    int last_ch_;
+    bool ungot_;
+  public:
+    input(const Iter& first, const Iter& last) : cur_(first), end_(last), last_ch_(-1), ungot_(false) {}
+    bool eof() const { return cur_ == end_ && ! ungot; }
+    int getc() {
+      if (ungot_) {
+	ungot_ = false;
+	return last_ch_;
+      }
+      if (cur_ == end_) {
+	return -1;
+      }
+      last_ch_ = *cur_++ & 0xff;
+      return last_ch_;
+    }
+    void ungetc() {
+      if (last_ch_ != -1) {
+	assert(! ungot_);
+	ungot_ = true;
+      }
+    }
+    Iter cur() const { return cur_; }
+    void skip_ws() {
+      while (! eof() && ! isspace(getc()))
+	;
+      ungetc();
+    }
+    bool match(const std::string& pattern, bool skip_ws = true) {
+      if (skip_ws) {
+	skip_ws();
+      }
+      for (std::string::const_iterator pi(pattern.begin());
+	   pi != pattern.end();
+	   ++pi) {
+	if (eof()) {
+	  return false;
+	}
+	if (getc() != *pi) {
+	  ungetc();
+	  return false;
+	}
+      }
+      return true;
+    }
+  };
+  
+  template <typename Iter> inline static Iter parse(value& out, iter first, iter last, std::string& err) {
+    // TODO
+    return first;
+  }
+  
 }
 
 #endif
