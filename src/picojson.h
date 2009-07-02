@@ -266,9 +266,9 @@ namespace picojson {
     do {
       value key, val;
       if (in.match("\"") == input<Iter>::positive
-	  && _parse_string(key, in) == input<Iter>::positive
+	  && _parse_string(key, in)
 	  && in.match(":") == input<Iter>::positive
-	  && _parse(val, in) == input<Iter>::positive) {
+	  && _parse(val, in)) {
 	o[key.to_str()] = val;
       } else {
 	return false;
@@ -300,7 +300,7 @@ namespace picojson {
 	return false;
       }
     } else if (IS("{")) {
-      if (_parse_object(out, in)) {
+      if (! _parse_object(out, in)) {
 	return false;
       }
     }
@@ -364,7 +364,7 @@ template <typename T> void is(const T& x, const T& y, const char* name = "")
 
 int main(void)
 {
-  plan(13);
+  plan(18);
   
   
 #define TEST(in, type, cmp) {						\
@@ -380,6 +380,18 @@ int main(void)
   TEST("false", bool, false);
   TEST("true", bool, true);
   TEST("\"hello\"", string, string("hello"));
+  
+  {
+    picojson::value v;
+    const char *s = "{ \"a\": true }";
+    string err = picojson::parse(v, s, s + strlen(s));
+    ok(err.empty(), "object no error");
+    ok(v.is<picojson::object>(), "object check type");
+    is(v.get<picojson::object>().size(), size_t(1), "check object size");
+    ok(v.get("a").is<bool>(), "check property exists");
+    is(v.get("a").get<bool>(), true,
+       "check property value");
+  }
   
   {
     picojson::value v;
