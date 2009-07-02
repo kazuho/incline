@@ -102,7 +102,7 @@ main(int argc, char** argv)
     exit(2);
   }
   
-  // handel the commond
+  // handle the command
   if (command == "print-trigger") {
     vector<string> stmt(mgr.create_trigger_all(true));
     printf("DELIMITER |\n");
