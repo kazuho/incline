@@ -165,15 +165,15 @@ namespace picojson {
     }
   }
   
-  template <typename Iter> struct input {
+  template <typename Iter> class input {
   protected:
     Iter cur_, end_;
     int last_ch_;
     bool ungot_;
-    size_t line_;
+    int line_;
   public:
     input(const Iter& first, const Iter& last) : cur_(first), end_(last), last_ch_(-1), ungot_(false), line_(1) {}
-    bool eof() const { return cur_ == end_ && ! ungot; }
+    bool eof() const { return cur_ == end_ && ! ungot_; }
     int getc() {
       if (ungot_) {
 	ungot_ = false;
@@ -201,10 +201,8 @@ namespace picojson {
 	;
       ungetc();
     }
-    bool expect(const char expect_ch, bool skip_ws = true) {
-      if (skip_ws) {
-	skip_ws();
-      }
+    bool expect(const char expect_ch) {
+      skip_ws();
       if (eof()) {
 	return false;
       }
@@ -237,63 +235,106 @@ namespace picojson {
     }
   };
   
-  int _parse_undefined(value& out, input& in) {
-    int r = in.match("undefined");
-    if (r == input::positive) {
-      out = value(undefined_type);
-    }
-    return r;
-  }
-  
-  int _parse_null(value& out, input& in) {
-    int r = in.match("null");
-    if (r == input::positive) {
-      out = value(undefined_type);
-    }
-    return r;
-  }
-  
-  int _parse_bool(value& out, input& in) {
-    int r = in.match("true");
-    switch (r) {
-    case input::positive:
-      (out = value(boolean_type)).get<bool>() = true;
-      break;
-    case input::negative:
-      if ((r = in.match("false")) == input::positive) {
-	(out = value(boolean_type)).get<bool>() = false;
-      }
-      break;
-    default:
-      break;
-    }
-    return r;
-  }
-  
-  int _parse_string(value& out, input& in) {
-    int r;
-    if ((r = in.match("\"")) != input::positive) {
-      return r;
-    }
-    std::string& s = (out = value(string_type)).get<std::string>();
+  template<typename Iter> static bool _parse_string(value& out, input<Iter>& in) {
+    // gcc 4.1 cannot compile if the below two lines are merged into one :-(
+    out = value(string_type);
+    std::string& s = out.get<std::string>();
     while (! in.eof()) {
       int ch = in.getc();
       if (ch == '"') {
-	return input::positive;
+	return true;
       } else if (ch == '\\') {
 	if (in.eof()) {
-	  return input::error;
+	  return false;
 	}
 	ch = in.getc();
       }
       s.push_back(ch);
     }
-    return input::error;
+    return false;
   }
   
-  template <typename Iter> inline static Iter parse(value& out, iter first, iter last, std::string& err) {
-    if (pa
-    return first;
+  template <typename Iter> static bool _parse_array(value& out, input<Iter>& in) {
+    out = value(array_type);
+    array& a = out.get<array>();
+    do {
+      a.push_back(value(undefined_type));
+      if (! _parse(a.back(), in)) {
+	return false;
+      }
+    } while (in.match(",") == input<Iter>::positive);
+    return in.match("]") == input<Iter>::positive;
+  }
+  
+  template <typename Iter> static bool _parse_object(value& out, input<Iter>& in) {
+    out = value(object_type);
+    object &o = out.get<object>();
+    do {
+      value key, val;
+      if (in.match("\"") == input<Iter>::positive
+	  && _parse_string(key, in) == input<Iter>::positive
+	  && in.match(":") == input<Iter>::positive
+	  && _parse(val, in) == input<Iter>::positive) {
+	o[key.to_str()] = val;
+      }
+    } while (in.match(",") == input<Iter>::positive);
+    return in.match("}") == input<Iter>::positive;
+  }
+  
+  template <typename Iter> static bool _parse(value& out, input<Iter>& in) {
+    int ret = input<Iter>::negative;
+#define IS(p)						\
+    (ret == input<Iter>::negative			\
+     && (ret = in.match(p)) == input<Iter>::positive)
+    if (IS("undefined")) {
+      out = value(undefined_type);
+    } else if (IS("null")) {
+      out = value(null_type);
+    } else if (IS("false")) {
+      out = value(boolean_type);
+      out.get<bool>() = true;
+    } else if (IS("true")) {
+      out = value(boolean_type);
+      out.get<bool>() = true;
+    } else if (IS("\"")) {
+      if (! _parse_string(out, in)) {
+	return true;
+      }
+    } else if (IS("[")) {
+      if (! _parse_array(out, in)) {
+	return true;
+      }
+    } else if (IS("{")) {
+      if (_parse_object(out, in)) {
+	return true;
+      }
+    }
+    // TODO number support
+#undef IS
+    return ret == input<Iter>::positive;
+  }
+  
+  template <typename Iter> static value parse(Iter& pos, const Iter& last, std::string& err) {
+    // setup
+    value out;
+    err = std::string();
+    input<Iter> in(pos, last);
+    // do
+    if (! _parse(out, in)) {
+      char buf[64];
+      sprintf(buf, "syntax error line %d near: ", in.line());
+      err = buf;
+      while (! in.eof()) {
+	int ch = in.getc();
+	if (ch == '\n') {
+	  break;
+	}
+	err += ch;
+      }
+      out = value(undefined_type);
+    }
+    pos = in.cur();
+    return out;
   }
   
 }
