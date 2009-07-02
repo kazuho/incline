@@ -262,7 +262,7 @@ namespace picojson {
   
   template <typename Iter> static bool _parse_object(value& out, input<Iter>& in) {
     out = value(object_type);
-    object &o = out.get<object>();
+    object& o = out.get<object>();
     do {
       value key, val;
       if (in.match("\"") == input<Iter>::positive
@@ -275,6 +275,24 @@ namespace picojson {
       }
     } while (in.match(",") == input<Iter>::positive);
     return in.match("}") == input<Iter>::positive;
+  }
+  
+  template <typename Iter> static bool _parse_number(value& out, input<Iter>& in) {
+    out = value(number_type);
+    std::string num_str;
+    while (! in.eof()) {
+      int ch = in.getc();
+      if ('0' <= ch && ch < '9' || ch == '+' || ch == '-' || ch == '.'
+	  || ch == 'e' || ch == 'E') {
+	num_str.push_back(ch);
+      } else {
+	in.ungetc();
+	break;
+      }
+    }
+    char* endp;
+    out.get<double>() = strtod(num_str.c_str(), &endp);
+    return endp == num_str.c_str() + num_str.size();
   }
   
   template <typename Iter> static bool _parse(value& out, input<Iter>& in) {
@@ -292,19 +310,20 @@ namespace picojson {
       out = value(boolean_type);
       out.get<bool>() = true;
     } else if (IS("\"")) {
-      if (! _parse_string(out, in)) {
-	return false;
-      }
+      return _parse_string(out, in);
     } else if (IS("[")) {
-      if (! _parse_array(out, in)) {
-	return false;
-      }
+      return _parse_array(out, in);
     } else if (IS("{")) {
-      if (! _parse_object(out, in)) {
-	return false;
+      return _parse_object(out, in);
+    } else {
+      int ch = in.getc();
+      if (ch != -1) {
+	in.ungetc();
+	if ('0' <= ch && ch <= '9' || ch == '-') {
+	  return _parse_number(out, in);
+	}
       }
     }
-    // TODO number support
 #undef IS
     return ret == input<Iter>::positive;
   }
@@ -379,6 +398,7 @@ int main(void)
   
   TEST("false", bool, false);
   TEST("true", bool, true);
+  TEST("3.5", double, 3.5);
   TEST("\"hello\"", string, string("hello"));
   
   {
