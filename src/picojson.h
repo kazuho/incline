@@ -267,6 +267,9 @@ namespace picojson {
   template <typename Iter> static bool _parse_object(value& out, input<Iter>& in) {
     out = value(object_type);
     object& o = out.get<object>();
+    if (in.match("}") == input<Iter>::positive) {
+      return true;
+    }
     do {
       value key, val;
       if (in.match("\"") == input<Iter>::positive
@@ -399,20 +402,23 @@ int main(void)
     is(v.get<type>(), cmp, in " correct output");			\
     is(*s, '\0', in " read to eof");					\
   }
-  
   TEST("false", bool, false);
   TEST("true", bool, true);
   TEST("90.5", double, 90.5);
   TEST("\"hello\"", string, string("hello"));
-  
-  {
-    picojson::value v;
-    const char *s = "[]";
-    string err = picojson::parse(v, s, s + strlen(s));
-    ok(err.empty(), "empty array no error");
-    ok(v.is<picojson::array>(), "empty array check type");
-    ok(v.get<picojson::array>().empty(), "check empty array size");
+#undef TEST
+
+#define TEST(type, expr) {					       \
+    picojson::value v;						       \
+    const char *s = expr;					       \
+    string err = picojson::parse(v, s, s + strlen(s));		       \
+    ok(err.empty(), "empty " #type " no error");		       \
+    ok(v.is<picojson::type>(), "empty " #type " check type");	       \
+    ok(v.get<picojson::type>().empty(), "check " #type " array size"); \
   }
+  TEST(array, "[]");
+  TEST(object, "{}");
+#undef TEST
   
   {
     picojson::value v;
@@ -441,8 +447,6 @@ int main(void)
     string err = picojson::parse(v, s, s + strlen(s));
     is(err, string("syntax error at line 1 near: oooo"), "error message");
   }
-  
-#undef TEST
   
   return 0;
 }
