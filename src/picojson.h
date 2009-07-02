@@ -3,9 +3,11 @@
 
 #include <cassert>
 #include <cstring>
+#include <iostream>
+#include <iterator>
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
 
 namespace picojson {
   
@@ -326,6 +328,11 @@ namespace picojson {
     }
     pos = in.cur();
     return err;
+  }
+  
+  inline static std::string parse(value& out, std::istream& is) {
+    std::istream_iterator<char> ii(is);
+    return parse(out, ii, std::istream_iterator<char>());
   }
   
 }

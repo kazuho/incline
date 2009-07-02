@@ -1,6 +1,9 @@
 extern "C" {
 #include <getopt.h>
 }
+#include <fstream>
+#include <iostream>
+#include <iterator>
 #include "incline.h"
 
 using namespace std;
@@ -14,11 +17,13 @@ static void usage(int argc, char** argv)
 int
 main(int argc, char** argv)
 {
-  string driver_name, command;
+  string driver_name, source_file, command;
+  picojson::value defs;
   
   { // parse commond
     static struct option longopts[] = {
       { "driver", required_argument, NULL, 'd' },
+      { "source", required_argument, NULL, 's' },
       { "help",   no_argument,       NULL, 'h' },
       { NULL,     0,                 NULL, 0 },
     };
@@ -27,6 +32,9 @@ main(int argc, char** argv)
       switch (ch) {
       case 'd':
 	driver_name = optarg;
+	break;
+      case 's':
+	source_file = optarg;
 	break;
       case 'h':
 	usage(argc, argv);
@@ -47,6 +55,30 @@ main(int argc, char** argv)
     if (driver_name.empty()) {
       fprintf(stderr, "--driver not set\n");
       exit(1);
+    }
+    if (source_file.empty()) {
+      fprintf(stderr, "--source not set\n");
+      exit(1);
+    }
+    { // parse source
+      string err;
+      if (source_file == "-") {
+	err = picojson::parse(defs, cin);
+      } else {
+	ifstream fin;
+	fin.open(source_file.c_str(), ios::in);
+	if (! fin.is_open()) {
+	  fprintf(stderr, "failed to open file:%s\n", source_file.c_str());
+	  exit(2);
+	}
+	err = picojson::parse(defs, fin);
+	fin.close();
+      }
+      if (! err.empty()) {
+	fprintf(stderr, "failed to parse: %s, %s\n", source_file.c_str(),
+		err.c_str());
+	exit(2);
+      }
     }
   }
   
