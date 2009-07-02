@@ -17,7 +17,7 @@ incline_driver_standalone::insert_trigger_of(const string& src_table) const
 			      _build_insert_from_def(def, src_table, "INSERT"));
     }
   }
-  return mgr_->build_trigger_stmt("INSERT", src_table, body);
+  return mgr_->build_trigger_stmt(src_table, "INSERT", body);
 }
 
 string
@@ -39,7 +39,7 @@ incline_driver_standalone::update_trigger_of(const string& src_table) const
       }
     }
   }
-  return mgr_->build_trigger_stmt("INSERT", src_table, body);
+  return mgr_->build_trigger_stmt(src_table, "UPDATE", body);
 }
 
 string
@@ -54,7 +54,7 @@ incline_driver_standalone::delete_trigger_of(const string& src_table) const
       incline_util::push_back(body, _build_delete_from_def(def, src_table));
     }
   }
-  return mgr_->build_trigger_stmt("DELETE", src_table, body);
+  return mgr_->build_trigger_stmt(src_table, "DELETE", body);
 }
 
 vector<string>

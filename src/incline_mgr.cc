@@ -119,7 +119,7 @@ incline_mgr::build_trigger_stmt(const string& src_table, const string& event,
 {
   std::string r = "CREATE TRIGGER " + _build_trigger_name(src_table, event)
     + ' ' + trigger_time_ + ' ' + event + " ON " + src_table
-    + "FOR EACH ROW BEGIN\n";
+    + " FOR EACH ROW BEGIN\n";
   for (vector<string>::const_iterator bi = body.begin();
        bi != body.end();
        ++bi) {
