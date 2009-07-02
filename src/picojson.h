@@ -75,6 +75,7 @@ namespace picojson {
     template <typename T> const T& get() const;
     template <typename T> T& get();
     operator bool() const;
+    const value& get(size_t idx) const;
     const value& get(const std::string& key) const;
     std::string to_str() const;
   };
@@ -171,6 +172,12 @@ namespace picojson {
     }
   }
   
+  inline const value& value::get(size_t idx) const {
+    static value s_undefined(undefined_type);
+    assert(is<array>());
+    return idx < array_->size() ? (*array_)[idx] : s_undefined;
+  }
+
   inline const value& value::get(const std::string& key) const {
     static value s_undefined(undefined_type);
     assert(is<object>());
@@ -185,13 +192,20 @@ namespace picojson {
     case boolean_type:   return boolean_ ? "true" : "false";
     case number_type:    {
       char buf[256];
+#ifdef _MSC_VER
+      _snprintf_s(buf, sizeof(buf), "%f", number_);
+#else
       snprintf(buf, sizeof(buf), "%f", number_);
+#endif
       return buf;
     }
     case string_type:    return *string_;
     case array_type:     return "array";
     case object_type:    return "object";
     default:             assert(0);
+#ifdef _MSC_VER
+      __assume(0);
+#endif
     }
   }
   
@@ -227,9 +241,12 @@ namespace picojson {
     Iter cur() const { return cur_; }
     int line() const { return line_; }
     void skip_ws() {
-      while (! eof() && isspace(getc()))
-	;
-      ungetc();
+      while (! eof()) {
+	if (! isspace(getc())) {
+	  ungetc();
+	  break;
+	}
+      }
     }
     enum {
       error,
@@ -257,6 +274,66 @@ namespace picojson {
     }
   };
   
+  template<typename Iter> static int _parse_quadhex(input<Iter> &in) {
+    int uni_ch = 0, hex;
+    for (int i = 0; i < 4; i++) {
+      if ((hex = in.getc()) == -1) {
+	return -1;
+      }
+      if ('0' <= hex && hex <= '9') {
+	hex -= '0';
+      } else if ('A' <= hex && hex <= 'F') {
+	hex -= 'A' - 0xa;
+      } else if ('a' <= hex && hex <= 'f') {
+	hex -= 'a' - 0xa;
+      } else {
+	return -1;
+      }
+      uni_ch = uni_ch * 16 + hex;
+    }
+    return uni_ch;
+  }
+  
+  template<typename Iter> static bool _parse_codepoint(std::string& out, input<Iter>& in) {
+    int uni_ch;
+    if ((uni_ch = _parse_quadhex(in)) == -1) {
+      return false;
+    }
+    if (0xd800 <= uni_ch && uni_ch <= 0xdfff) {
+      if (0xdc00 <= uni_ch) {
+	// a second 16-bit of a surrogate pair appeared
+	return false;
+      }
+      // first 16-bit of surrogate pair, get the next one
+      if (in.getc() != '\\' || in.getc() != 'u') {
+	return false;
+      }
+      int second = _parse_quadhex(in);
+      if (! (0xdc00 <= second && second <= 0xdfff)) {
+	return false;
+      }
+      uni_ch = ((uni_ch - 0xd800) << 10) | ((second - 0xdc00) & 0x3ff);
+      uni_ch += 0x10000;
+    }
+    if (uni_ch < 0x80) {
+      out.push_back(uni_ch);
+    } else {
+      if (uni_ch < 0x800) {
+	out.push_back(0xc0 | (uni_ch >> 6));
+      } else {
+	if (uni_ch < 0x10000) {
+	  out.push_back(0xe0 | (uni_ch >> 12));
+	} else {
+	  out.push_back(0xf0 | (uni_ch >> 18));
+	  out.push_back(0x80 | ((uni_ch >> 12) & 0x3f));
+	}
+	out.push_back(0x80 | ((uni_ch >> 6) & 0x3f));
+      }
+      out.push_back(0x80 | (uni_ch & 0x3f));
+    }
+    return true;
+  }
+  
   template<typename Iter> static bool _parse_string(value& out, input<Iter>& in) {
     // gcc 4.1 cannot compile if the below two lines are merged into one :-(
     out = value(string_type);
@@ -266,12 +343,31 @@ namespace picojson {
       if (ch == '"') {
 	return true;
       } else if (ch == '\\') {
-	if (in.eof()) {
+	if ((ch = in.getc()) == -1) {
 	  return false;
 	}
-	ch = in.getc();
+	switch (ch) {
+#define MAP(sym, val) case sym: s.push_back(val); break
+	  MAP('"', '\"');
+	  MAP('\\', '\\');
+	  MAP('/', '/');
+	  MAP('b', '\b');
+	  MAP('f', '\f');
+	  MAP('n', '\n');
+	  MAP('r', '\r');
+	  MAP('t', '\t');
+#undef MAP
+	case 'u':
+	  if (! _parse_codepoint(s, in)) {
+	    return false;
+	  }
+	  break;
+	default:
+	  return false;
+	}
+      } else {
+	s.push_back(ch);
       }
-      s.push_back(ch);
     }
     return false;
   }
@@ -417,7 +513,7 @@ template <typename T> void is(const T& x, const T& y, const char* name = "")
 
 int main(void)
 {
-  plan(24);
+  plan(49);
   
   
 #define TEST(in, type, cmp) {						\
@@ -433,6 +529,10 @@ int main(void)
   TEST("true", bool, true);
   TEST("90.5", double, 90.5);
   TEST("\"hello\"", string, string("hello"));
+  TEST("\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"", string, string("\"\\/\b\f\n\r\t"));
+  TEST("\"\\u0061\\u30af\\u30ea\\u30b9\"", string,
+       string("a\xe3\x82\xaf\xe3\x83\xaa\xe3\x82\xb9"));
+  TEST("\"\\ud840\\udc0b\"", string, string("\xf0\xa0\x80\x8b"));
 #undef TEST
 
 #define TEST(type, expr) {					       \
@@ -449,11 +549,17 @@ int main(void)
   
   {
     picojson::value v;
-    const char *s = "[1,2,3]";
+    const char *s = "[1,true,\"hello\"]";
     string err = picojson::parse(v, s, s + strlen(s));
     ok(err.empty(), "array no error");
     ok(v.is<picojson::array>(), "array check type");
     is(v.get<picojson::array>().size(), size_t(3), "check array size");
+    ok(v.get(0).is<double>(), "check array[0] type");
+    is(v.get(0).get<double>(), 1.0, "check array[0] value");
+    ok(v.get(1).is<bool>(), "check array[1] type");
+    ok(v.get(1).get<bool>(), "check array[1] value");
+    ok(v.get(2).is<string>(), "check array[2] type");
+    is(v.get(2).get<string>(), string("hello"), "check array[2] value");
   }
   
   {
