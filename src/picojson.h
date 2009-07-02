@@ -268,6 +268,8 @@ namespace picojson {
 	  && in.match(":") == input<Iter>::positive
 	  && _parse(val, in) == input<Iter>::positive) {
 	o[key.to_str()] = val;
+      } else {
+	return false;
       }
     } while (in.match(",") == input<Iter>::positive);
     return in.match("}") == input<Iter>::positive;
