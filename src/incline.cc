@@ -82,25 +82,36 @@ main(int argc, char** argv)
     }
   }
   
-  { // do it
-    incline_driver* driver;
-    if (driver_name == "standalone") {
-      driver = new incline_driver_standalone();
-    } else if (driver_name == "async_qtable") {
-      driver = new incline_driver_async_qtable();
-    } else {
-      fprintf(stderr, "unknown driver: %s\n", driver_name.c_str());
-      exit(1);
-    }
-    incline_mgr mgr(driver);
-    if (command == "print-trigger") {
-      vector<string> stmt(mgr.create_trigger_all(true));
-      fputs(incline_util::join('\n', stmt.begin(), stmt.end()).c_str(),
-	    stdout);
-    } else {
-      fprintf(stderr, "unknown command: %s\n", command.c_str());
-      exit(1);
-    }
+  // create driver
+  incline_driver* driver;
+  if (driver_name == "standalone") {
+    driver = new incline_driver_standalone();
+  } else if (driver_name == "async_qtable") {
+    driver = new incline_driver_async_qtable();
+  } else {
+    fprintf(stderr, "unknown driver: %s\n", driver_name.c_str());
+    exit(1);
+  }
+  
+  // create manager and feed the settings
+  incline_mgr mgr(driver);
+  string err = mgr.parse(defs);
+  if (! err.empty()) {
+    fprintf(stderr, "failed to parse: %s, %s\n", source_file.c_str(),
+	    err.c_str());
+    exit(2);
+  }
+  
+  // handel the commond
+  if (command == "print-trigger") {
+    vector<string> stmt(mgr.create_trigger_all(true));
+    printf("DELIMITER |\n");
+    fputs(incline_util::join("|\n", stmt.begin(), stmt.end()).c_str(),
+	  stdout);
+    printf("\nDELIMTER ;\n");
+  } else {
+    fprintf(stderr, "unknown command: %s\n", command.c_str());
+    exit(1);
   }
   
   return 0;

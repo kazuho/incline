@@ -13,13 +13,13 @@ protected:
   incline_driver* driver_;
   std::string trigger_time_;
 public:
-  incline_mgr(incline_driver* d) : db_name_("test"), defs_(), driver_(d), trigger_time_("AFTER") {}
+  incline_mgr(incline_driver* d);
   virtual ~incline_mgr();
   std::string db_name() const { return db_name_; }
   const std::vector<incline_def*>& defs() const { return defs_; }
   incline_driver* driver() { return driver_; }
   std::string trigger_time() const { return trigger_time_; }
-  void add_def(incline_def* def);
+  std::string parse(const picojson::value& src);
   std::vector<std::string> get_src_tables() const;
   std::vector<std::string> create_trigger_all(bool drop_if_exists) const;
   std::string insert_trigger_of(const std::string& src_table) const;

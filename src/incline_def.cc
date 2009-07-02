@@ -107,9 +107,9 @@ incline_def::parse(const picojson::value& def)
 	 mi != merge.get<picojson::object>().end();
 	 ++mi) {
       string l(mi->first), r(mi->second.to_str());
-      if (! is_dependent_of(table_of_column(l))) {
+      if (! is_dependent_of(table_of_column(l, ""))) {
 	return string("table of ") + l + " not in source";
-      } else if (! is_dependent_of(table_of_column(r))) {
+      } else if (! is_dependent_of(table_of_column(r, ""))) {
 	return string("table of ") + r + " not in source";
       }
       merge_.push_back(make_pair(l, r));
@@ -153,7 +153,7 @@ incline_def::_parse_columns(const picojson::value& def,
 	 = cols.get<picojson::object>().begin();
        ci != cols.get<picojson::object>().end();
        ++ci) {
-    if (! is_dependent_of(table_of_column(ci->first))) {
+    if (! is_dependent_of(table_of_column(ci->first, ""))) {
       return string("table of ") + ci->first + " not in source";
     }
     columns[ci->first] = ci->second.to_str();
@@ -181,9 +181,13 @@ incline_def::_rebuild_columns()
 }
 
 string
-incline_def::table_of_column(const string& column)
+incline_def::table_of_column(const string& column, const char* ret_on_error)
 {
   string::size_type dot_at = column.find('.', 0);
-  assert(dot_at != string::npos);
+  if (ret_on_error == NULL) {
+    assert(dot_at != string::npos);
+  } else if (dot_at == string::npos) {
+    return ret_on_error;
+  }
   return column.substr(0, dot_at);
 }

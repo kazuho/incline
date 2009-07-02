@@ -1,9 +1,15 @@
 #include <algorithm>
 #include <set>
-#include "incline_mgr.h"
 #include "incline_driver.h"
+#include "incline_mgr.h"
 
 using namespace std;
+
+incline_mgr::incline_mgr(incline_driver* d)
+  : db_name_("test"), defs_(), driver_(d), trigger_time_("AFTER")
+{
+  driver_->mgr_ = this;
+}
 
 incline_mgr::~incline_mgr() {
   for (vector<incline_def*>::iterator di = defs_.begin();
@@ -14,10 +20,27 @@ incline_mgr::~incline_mgr() {
   delete driver_;
 }
 
-void
-incline_mgr::add_def(incline_def* def)
+string
+incline_mgr::parse(const picojson::value& src)
 {
-  defs_.push_back(def);
+  if (! src.is<picojson::array>()) {
+    return "definition should be an array of objects";
+  }
+  for (picojson::array::const_iterator di = src.get<picojson::array>().begin();
+       di != src.get<picojson::array>().end();
+       ++di) {
+    if (! di->is<picojson::object>()) {
+      return "definition should be an array of objects";
+    }
+    incline_def* def = driver_->create_def();
+    string err = def->parse(*di);
+    if (! err.empty()) {
+      delete def;
+      return err;
+    }
+    defs_.push_back(def);
+  }
+  return string();
 }
 
 vector<string>

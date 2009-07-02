@@ -12,6 +12,7 @@ namespace picojson {
 
 class incline_driver {
 protected:
+  friend class incline_mgr;
   incline_mgr* mgr_;
 public:
   incline_driver() : mgr_(NULL) {}

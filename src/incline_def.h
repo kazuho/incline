@@ -40,7 +40,7 @@ protected:
   std::string _parse_columns(const picojson::value& def, const std::string& property, std::map<std::string, std::string>& columns);
   void _rebuild_columns();
 public:
-  static std::string table_of_column(const std::string& column);
+  static std::string table_of_column(const std::string& column, const char* ret_on_error = NULL);
 };
 
 #endif
