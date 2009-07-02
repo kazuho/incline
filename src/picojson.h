@@ -291,15 +291,15 @@ namespace picojson {
       out.get<bool>() = true;
     } else if (IS("\"")) {
       if (! _parse_string(out, in)) {
-	return true;
+	return false;
       }
     } else if (IS("[")) {
       if (! _parse_array(out, in)) {
-	return true;
+	return false;
       }
     } else if (IS("{")) {
       if (_parse_object(out, in)) {
-	return true;
+	return false;
       }
     }
     // TODO number support
