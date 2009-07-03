@@ -11,7 +11,7 @@ incline_def_async_qtable::parse(const picojson::value& def)
   }
   // post init
   if (queue_table_.empty()) {
-    queue_table_ = string("_CQ_") + destination();
+    queue_table_ = string("_IQ_") + destination();
   }
   return string();
 }

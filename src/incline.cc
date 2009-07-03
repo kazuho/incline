@@ -20,13 +20,24 @@ static getoptpp::opt_str opt_mysql_password(0, "mysql-password", false,
 static getoptpp::opt_int opt_mysql_port(0, "mysql-port", false, "mysql port",
 					3306);
 
-static void run_all_stmt(tmd::conn_t dbh, const vector<string>& stmt)
+static incline_mgr* mgr = NULL;
+
+static void run_all_stmt(tmd::conn_t& dbh, const vector<string>& stmt)
 {
   for (vector<string>::const_iterator si = stmt.begin();
        si != stmt.end();
        ++si) {
-    tmd::execute(dbh, si->c_str());
+    tmd::execute(dbh, *si);
   }
+}
+
+inline incline_driver_async_qtable* aq_driver()
+{
+  if (*opt_mode != "queue-table") {
+    cerr << "command only supported under queue-table mode" << endl;
+    exit(1);
+  }
+  return static_cast<incline_driver_async_qtable*>(mgr->driver());
 }
 
 int
@@ -49,17 +60,18 @@ main(int argc, char** argv)
   command = *argv++;
   argc--;
   
-  // create manager
-  incline_driver* driver;
-  if (*opt_mode == "standalone") {
-    driver = new incline_driver_standalone();
-  } else if (*opt_mode == "async_qtable") {
-    driver = new incline_driver_async_qtable();
-  } else {
-    cerr << "unknown mode:" << *opt_mode << endl;
-    exit(1);
+  { // create manager
+    incline_driver* driver;
+    if (*opt_mode == "standalone") {
+      driver = new incline_driver_standalone();
+    } else if (*opt_mode == "queue-table") {
+      driver = new incline_driver_async_qtable();
+    } else {
+      cerr << "unknown mode:" << *opt_mode << endl;
+      exit(1);
+    }
+    mgr = new incline_mgr(driver);
   }
-  incline_mgr mgr(driver);
   
   { // parse source
     string err;
@@ -76,7 +88,7 @@ main(int argc, char** argv)
       fin.close();
     }
     if (err.empty()) {
-      err = mgr.parse(defs);
+      err = mgr->parse(defs);
     }
     if (! err.empty()) {
       cerr << "failed to parse file:" << *opt_source << ": " << err << endl;
@@ -94,17 +106,41 @@ main(int argc, char** argv)
   
   // handle the command
   if (command == "create-trigger") {
-    vector<string> stmt(mgr.create_trigger_all(true));
+    vector<string> stmt(mgr->create_trigger_all(false));
     run_all_stmt(dbh, stmt);
   } else if (command == "drop-trigger") {
-    vector<string> stmt(mgr.drop_trigger_all(true));
+    vector<string> stmt(mgr->drop_trigger_all(true));
     run_all_stmt(dbh, stmt);
   } else if (command == "print-trigger") {
-    vector<string> stmt(mgr.create_trigger_all(true));
+    vector<string> stmt(mgr->create_trigger_all(false));
     picojson::value a(picojson::array_type, false);
     copy(stmt.begin(), stmt.end(), back_inserter(a.get<picojson::array>()));
     a.serialize(ostream_iterator<char>(cout));
     cout << endl;
+  } else if (command == "create-queue") {
+    vector<string> stmt(aq_driver()->create_table_all(false, dbh));
+    run_all_stmt(dbh, stmt);
+  } else if (command == "drop-queue") {
+    vector<string> stmt(aq_driver()->drop_table_all(true));
+    run_all_stmt(dbh, stmt);
+  } else if (command == "forward") {
+    pthread_t* thr = new pthread_t [mgr->defs().size()];
+    for (size_t i = 0; i < mgr->defs().size(); ++i) {
+      incline_driver_async_qtable::forwarder* fw
+	= aq_driver()->create_forwarder(mgr->defs()[i],
+					new tmd::conn_t(*opt_mysql_host,
+							*opt_mysql_user,
+							*opt_mysql_password,
+							*opt_database,
+							*opt_mysql_port),
+					1);
+      pthread_create(thr + i, NULL, incline_driver_async_qtable::forwarder::run,
+		     fw);
+    }
+    for (size_t i = 0; i < mgr->defs().size(); ++i) {
+      pthread_join(thr[i], NULL);
+    }
+    delete thr;
   } else {
     fprintf(stderr, "unknown command: %s\n", command.c_str());
     exit(1);

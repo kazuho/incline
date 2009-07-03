@@ -126,14 +126,24 @@ namespace tmd {
     return r;
   }
   
-  inline void vexecute(MYSQL* mysql, const char* fmt, va_list args)
+  inline void _execute(MYSQL* mysql, const char* sql)
   {
-    char sql[10240];
-    vsprintf(sql, fmt, args);
     int ret = mysql_query(mysql, sql);
     if (ret != 0) {
       throw error_t(ssprintf("mysql error:%d for sql: %s\n", ret, sql));
     }
+  }
+  
+  inline void execute(MYSQL* mysql, const std::string& sql)
+  {
+    _execute(mysql, sql.c_str());
+  }
+
+  inline void vexecute(MYSQL* mysql, const char* fmt, va_list args)
+  {
+    char sql[10240];
+    vsprintf(sql, fmt, args);
+    _execute(mysql, sql);
   }
   
   void execute(MYSQL* mysql, const char* fmt, ...)
@@ -152,9 +162,14 @@ namespace tmd {
     MYSQL_ROW row_;
     unsigned long* lengths_;
   public:
+    query_t(MYSQL* mysql, const std::string& sql) : row_(NULL), lengths_(NULL) {
+      execute(mysql, sql);
+      res_ = mysql_store_result(mysql);
+      assert(res_ != NULL);
+    }
     query_t(MYSQL* mysql, const char* fmt, ...)
-    __attribute__((__format__(__printf__, 3, 4)))
-    : row_(NULL), lengths_(NULL) {
+      __attribute__((__format__(__printf__, 3, 4)))
+      : row_(NULL), lengths_(NULL) {
       va_list args;
       va_start(args, fmt);
       vexecute(mysql, fmt, args);
@@ -174,6 +189,7 @@ namespace tmd {
   private:
     query_t(const query_t&);
     query_t& operator=(const query_t&);
+  public:
   };
   
   class conn_t {
@@ -193,6 +209,7 @@ namespace tmd {
     ~conn_t() {
       if (conn_ != NULL) {
 	mysql_close(conn_);
+	conn_ = NULL;
       }
     }
     operator MYSQL*() {
@@ -212,6 +229,9 @@ namespace tmd {
       }
       return conn_;
     }
+  private:
+    conn_t(const conn_t&);
+    conn_t& operator=(const conn_t&);
   };
 
 }

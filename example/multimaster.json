@@ -1,0 +1,13 @@
+[
+  {
+    "destination" : "incline_timeline",
+    "source"      : [ "incline_tweet", "incline_follow" ],
+    "pk_columns"  : {
+      "incline_follow.follower" : "user_id",
+      "incline_tweet.id"        : "tweet_id"
+    },
+    "merge"       : {
+      "incline_tweet.user_id" : "incline_follow.followee"
+    }
+  }
+]

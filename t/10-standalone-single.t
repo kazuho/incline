@@ -20,7 +20,7 @@ ok(
 );
 
 # load rules
-system(qw(src/incline --source=example/standalone-single.json --database=test create-trigger)) == 0
+system(qw(src/incline --source=example/single.json --database=test create-trigger)) == 0
     or die "src/incline failed: $?";
 
 # run tests

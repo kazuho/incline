@@ -3,6 +3,7 @@
 #include "incline_driver.h"
 #include "incline_mgr.h"
 #include "incline_util.h"
+#include "tmd.h"
 
 using namespace std;
 
@@ -92,7 +93,7 @@ vector<string>
 incline_mgr::drop_trigger_all(bool drop_if_exists) const
 {
   vector<string> r;
-  vector<string> src_tables;
+  vector<string> src_tables(get_src_tables());
   
   for (vector<string>::const_iterator sti = src_tables.begin();
        sti != src_tables.end();
