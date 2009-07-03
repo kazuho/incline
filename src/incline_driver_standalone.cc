@@ -4,7 +4,7 @@
 
 using namespace std;
 
-string
+vector<string>
 incline_driver_standalone::insert_trigger_of(const string& src_table) const
 {
   vector<string> body;
@@ -20,7 +20,7 @@ incline_driver_standalone::insert_trigger_of(const string& src_table) const
   return mgr_->build_trigger_stmt(src_table, "INSERT", body);
 }
 
-string
+vector<string>
 incline_driver_standalone::update_trigger_of(const string& src_table) const
 {
   vector<string> body;
@@ -42,7 +42,7 @@ incline_driver_standalone::update_trigger_of(const string& src_table) const
   return mgr_->build_trigger_stmt(src_table, "UPDATE", body);
 }
 
-string
+vector<string>
 incline_driver_standalone::delete_trigger_of(const string& src_table) const
 {
   vector<string> body;

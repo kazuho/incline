@@ -2,6 +2,7 @@
 #include <set>
 #include "incline_driver.h"
 #include "incline_mgr.h"
+#include "incline_util.h"
 
 using namespace std;
 
@@ -71,35 +72,52 @@ incline_mgr::create_trigger_all(bool drop_if_exists) const
        sti != src_tables.end();
        ++sti) {
     if (drop_if_exists) {
-      r.push_back(drop_trigger_of(*sti, "INSERT", 1));
+      r.push_back(drop_trigger_of(*sti, "INSERT", true));
     }
-    r.push_back(insert_trigger_of(*sti));
+    incline_util::push_back(r, insert_trigger_of(*sti));
     if (drop_if_exists) {
-      r.push_back(drop_trigger_of(*sti, "UPDATE", 1));
+      r.push_back(drop_trigger_of(*sti, "UPDATE", true));
     }
-    r.push_back(update_trigger_of(*sti));
+    incline_util::push_back(r, update_trigger_of(*sti));
     if (drop_if_exists) {
-      r.push_back(drop_trigger_of(*sti, "DELETE", 1));
+      r.push_back(drop_trigger_of(*sti, "DELETE", true));
     }
-    r.push_back(delete_trigger_of(*sti));
+    incline_util::push_back(r, delete_trigger_of(*sti));
   }
   
   return r;
 }
 
-string
+vector<string>
+incline_mgr::drop_trigger_all(bool drop_if_exists) const
+{
+  vector<string> r;
+  vector<string> src_tables;
+  
+  for (vector<string>::const_iterator sti = src_tables.begin();
+       sti != src_tables.end();
+       ++sti) {
+    r.push_back(drop_trigger_of(*sti, "INSERT", drop_if_exists));
+    r.push_back(drop_trigger_of(*sti, "UPDATE", drop_if_exists));
+    r.push_back(drop_trigger_of(*sti, "DELETE", drop_if_exists));
+  }
+  
+  return r;
+}
+
+vector<string>
 incline_mgr::insert_trigger_of(const string& src_table) const
 {
   return driver_->insert_trigger_of(src_table);
 }
 
-string
+vector<string>
 incline_mgr::update_trigger_of(const string& src_table) const
 {
   return driver_->update_trigger_of(src_table);
 }
 
-string
+vector<string>
 incline_mgr::delete_trigger_of(const string& src_table) const
 {
   return driver_->delete_trigger_of(src_table);
@@ -109,24 +127,27 @@ string
 incline_mgr::drop_trigger_of(const string& src_table, const string& event,
 			     bool if_exists) const
 {
-  return string("DROP TRIGGER") + (if_exists ? " IF EXISTS" : "")
+  return string("DROP TRIGGER ") + (if_exists ? "IF EXISTS " : "")
     + _build_trigger_name(src_table, event);
 }
 
-string
+vector<string>
 incline_mgr::build_trigger_stmt(const string& src_table, const string& event,
 				const vector<string>& body) const
 {
+  if (body.size() == 0) {
+    return vector<string>();
+  }
   std::string r = "CREATE TRIGGER " + _build_trigger_name(src_table, event)
     + ' ' + trigger_time_ + ' ' + event + " ON " + src_table
     + " FOR EACH ROW BEGIN\n";
   for (vector<string>::const_iterator bi = body.begin();
        bi != body.end();
        ++bi) {
-    r += string("  ") + *bi + '\n';
+    r += string("  ") + *bi + ";\n";
   }
   r += "END";
-  return r;
+  return incline_util::vectorize(r);
 }
 
 string

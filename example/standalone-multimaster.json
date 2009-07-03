@@ -1,0 +1,13 @@
+[
+  {
+    "destination" : "canal_timeline",
+    "source"      : [ "canal_tweet", "canal_follow" ],
+    "pk_columns"  : {
+      "canal_follow.follower" : "user_id",
+      "canal_tweet.id"        : "tweet_id"
+    },
+    "merge"       : {
+      "canal_tweet.user_id" : "canal_follow.followee"
+    }
+  }
+]

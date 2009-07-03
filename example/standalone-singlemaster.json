@@ -1,0 +1,16 @@
+[
+  {
+    "destination"   : "incline_cal_by_user",
+    "source"        : [ "incline_cal", "incline_cal_member" ],
+    "pk_columns"    : {
+      "incline_cal_member.user_id" : "_user_id",
+      "incline_cal_member.cal_id"  : "_cal_id"
+    },
+    "npk_columns"   : {
+      "incline_cal.at" : "_at"
+    },
+    "merge"         : {
+      "incline_cal.id" : "incline_cal_member.cal_id"
+    }
+  }
+]

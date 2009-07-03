@@ -2,6 +2,7 @@
 #define incline_driver_h
 
 #include <string>
+#include <vector>
 
 class incline_def;
 class incline_driver;
@@ -17,9 +18,9 @@ protected:
 public:
   incline_driver() : mgr_(NULL) {}
   virtual ~incline_driver() {}
-  virtual std::string insert_trigger_of(const std::string& src_table) const = 0;
-  virtual std::string update_trigger_of(const std::string& src_table) const = 0;
-  virtual std::string delete_trigger_of(const std::string& src_table) const = 0;
+  virtual std::vector<std::string> insert_trigger_of(const std::string& src_table) const = 0;
+  virtual std::vector<std::string> update_trigger_of(const std::string& src_table) const = 0;
+  virtual std::vector<std::string> delete_trigger_of(const std::string& src_table) const = 0;
   virtual incline_def* create_def() const;
 };
 

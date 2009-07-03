@@ -29,6 +29,7 @@
 #define picojson_h
 
 #include <cassert>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -36,6 +37,14 @@
 #include <map>
 #include <string>
 #include <vector>
+
+#ifdef _MSC_VER
+    #define SNPRINTF _snprintf_s
+    #pragma warning(push)
+    #pragma warning(disable : 4244) // conversion from int to char
+#else
+    #define SNPRINTF snprintf
+#endif
 
 namespace picojson {
   
@@ -67,7 +76,13 @@ namespace picojson {
       object* object_;
     };
   public:
-    value(int type = undefined_type);
+    value();
+    value(int type, bool);
+    value(bool b);
+    value(double n);
+    value(const std::string& s);
+    value(const array& a);
+    value(const object& o);
     ~value();
     value(const value& x);
     value& operator=(const value& x);
@@ -78,12 +93,16 @@ namespace picojson {
     const value& get(size_t idx) const;
     const value& get(const std::string& key) const;
     std::string to_str() const;
+    template <typename Iter> void serialize(Iter os) const;
+    std::string serialize() const;
   };
   
   typedef value::array array;
   typedef value::object object;
   
-  inline value::value(int type) : type_(type) {
+  inline value::value() : type_(undefined_type) {}
+  
+  inline value::value(int type, bool) : type_(type) {
     switch (type) {
 #define INIT(p, v) case p##type: p = v; break
       INIT(boolean_, false);
@@ -94,6 +113,26 @@ namespace picojson {
 #undef INIT
     default: break;
     }
+  }
+  
+  inline value::value(bool b) : type_(boolean_type) {
+    boolean_ = b;
+  }
+  
+  inline value::value(double n) : type_(number_type) {
+    number_ = n;
+  }
+  
+  inline value::value(const std::string& s) : type_(string_type) {
+    string_ = new std::string(s);
+  }
+  
+  inline value::value(const array& a) : type_(array_type) {
+    array_ = new array(a);
+  }
+  
+  inline value::value(const object& o) : type_(object_type) {
+    object_ = new object(o);
   }
   
   inline value::~value() {
@@ -164,7 +203,7 @@ namespace picojson {
     case boolean_type:
       return boolean_;
     case number_type:
-      return number_;
+      return number_ != 0;
     case string_type:
       return ! string_->empty();
     default:
@@ -173,13 +212,13 @@ namespace picojson {
   }
   
   inline const value& value::get(size_t idx) const {
-    static value s_undefined(undefined_type);
+    static value s_undefined;
     assert(is<array>());
     return idx < array_->size() ? (*array_)[idx] : s_undefined;
   }
 
   inline const value& value::get(const std::string& key) const {
-    static value s_undefined(undefined_type);
+    static value s_undefined;
     assert(is<object>());
     object::const_iterator i = object_->find(key);
     return i != object_->end() ? i->second : s_undefined;
@@ -192,11 +231,7 @@ namespace picojson {
     case boolean_type:   return boolean_ ? "true" : "false";
     case number_type:    {
       char buf[256];
-#ifdef _MSC_VER
-      _snprintf_s(buf, sizeof(buf), "%f", number_);
-#else
-      snprintf(buf, sizeof(buf), "%f", number_);
-#endif
+      SNPRINTF(buf, sizeof(buf), "%f", number_);
       return buf;
     }
     case string_type:    return *string_;
@@ -207,6 +242,81 @@ namespace picojson {
       __assume(0);
 #endif
     }
+  }
+  
+  template <typename Iter> void copy(const std::string& s, Iter oi) {
+    std::copy(s.begin(), s.end(), oi);
+  }
+  
+  template <typename Iter> void serialize_str(const std::string& s, Iter oi) {
+    *oi++ = '"';
+    for (std::string::const_iterator i = s.begin(); i != s.end(); ++i) {
+      switch (*i) {
+#define MAP(val, sym) case val: copy(sym, oi); break
+	MAP('"', "\\\"");
+	MAP('\\', "\\\\");
+	MAP('/', "\\/");
+	MAP('\b', "\\b");
+	MAP('\f', "\\f");
+	MAP('\n', "\\n");
+	MAP('\r', "\\r");
+	MAP('\t', "\\t");
+#undef MAP
+      default:
+	if ((unsigned char)*i < 0x20 || *i == 0x7f) {
+	  char buf[7];
+	  SNPRINTF(buf, sizeof(buf), "\\u%04x", *i & 0xff);
+	  copy(buf, buf + 6, oi);
+	  } else {
+	  *oi++ = *i;
+	}
+	break;
+      }
+    }
+    *oi++ = '"';
+  }
+  
+  template <typename Iter> void value::serialize(Iter oi) const {
+    switch (type_) {
+    case string_type:
+      serialize_str(*string_, oi);
+      break;
+    case array_type: {
+      *oi++ = '[';
+      for (array::const_iterator i = array_->begin(); i != array_->end(); ++i) {
+	if (i != array_->begin()) {
+	  *oi++ = ',';
+	}
+	i->serialize(oi);
+      }
+      *oi++ = ']';
+      break;
+    }
+    case object_type: {
+      *oi++ = '{';
+      for (object::const_iterator i = object_->begin();
+	   i != object_->end();
+	   ++i) {
+	if (i != object_->begin()) {
+	  *oi++ = ',';
+	}
+	serialize_str(i->first, oi);
+	*oi++ = ':';
+	i->second.serialize(oi);
+      }
+      *oi++ = '}';
+      break;
+    }
+    default:
+      copy(to_str(), oi);
+      break;
+    }
+  }
+  
+  inline std::string value::serialize() const {
+    std::string s;
+    serialize(std::back_inserter(s));
+    return s;
   }
   
   template <typename Iter> class input {
@@ -336,7 +446,7 @@ namespace picojson {
   
   template<typename Iter> static bool _parse_string(value& out, input<Iter>& in) {
     // gcc 4.1 cannot compile if the below two lines are merged into one :-(
-    out = value(string_type);
+    out = value(string_type, false);
     std::string& s = out.get<std::string>();
     while (! in.eof()) {
       int ch = in.getc();
@@ -373,7 +483,7 @@ namespace picojson {
   }
   
   template <typename Iter> static bool _parse_array(value& out, input<Iter>& in) {
-    out = value(array_type);
+    out = value(array_type, false);
     array& a = out.get<array>();
     if (in.match("]") == input<Iter>::positive) {
       return true;
@@ -388,7 +498,7 @@ namespace picojson {
   }
   
   template <typename Iter> static bool _parse_object(value& out, input<Iter>& in) {
-    out = value(object_type);
+    out = value(object_type, false);
     object& o = out.get<object>();
     if (in.match("}") == input<Iter>::positive) {
       return true;
@@ -408,11 +518,10 @@ namespace picojson {
   }
   
   template <typename Iter> static bool _parse_number(value& out, input<Iter>& in) {
-    out = value(number_type);
     std::string num_str;
     while (! in.eof()) {
       int ch = in.getc();
-      if ('0' <= ch && ch <= '9' || ch == '+' || ch == '-' || ch == '.'
+      if (('0' <= ch && ch <= '9') || ch == '+' || ch == '-' || ch == '.'
 	  || ch == 'e' || ch == 'E') {
 	num_str.push_back(ch);
       } else {
@@ -421,7 +530,7 @@ namespace picojson {
       }
     }
     char* endp;
-    out.get<double>() = strtod(num_str.c_str(), &endp);
+    out = strtod(num_str.c_str(), &endp);
     return endp == num_str.c_str() + num_str.size();
   }
   
@@ -431,14 +540,13 @@ namespace picojson {
     (ret == input<Iter>::negative			\
      && (ret = in.match(p)) == input<Iter>::positive)
     if (IS("undefined")) {
-      out = value(undefined_type);
+      out = value();
     } else if (IS("null")) {
-      out = value(null_type);
+      out = value(null_type, false);
     } else if (IS("false")) {
-      out = value(boolean_type);
+      out = false;
     } else if (IS("true")) {
-      out = value(boolean_type);
-      out.get<bool>() = true;
+      out = true;
     } else if (IS("\"")) {
       return _parse_string(out, in);
     } else if (IS("[")) {
@@ -449,7 +557,7 @@ namespace picojson {
       int ch = in.getc();
       if (ch != -1) {
 	in.ungetc();
-	if ('0' <= ch && ch <= '9' || ch == '-') {
+	if (('0' <= ch && ch <= '9') || ch == '-') {
 	  return _parse_number(out, in);
 	}
       }
@@ -465,7 +573,7 @@ namespace picojson {
     // do
     if (! _parse(out, in)) {
       char buf[64];
-      sprintf(buf, "syntax error at line %d near: ", in.line());
+      SNPRINTF(buf, sizeof(buf), "syntax error at line %d near: ", in.line());
       err = buf;
       while (! in.eof()) {
 	int ch = in.getc();
@@ -484,10 +592,45 @@ namespace picojson {
     return parse(out, ii, std::istreambuf_iterator<char>());
   }
   
+  template <typename T> struct last_error_t {
+    static std::string s;
+  };
+  template <typename T> std::string last_error_t<T>::s;
+  
+  inline void set_last_error(const std::string& s) {
+    last_error_t<bool>::s = s;
+  }
+  
+  inline const std::string& get_last_error() {
+    return last_error_t<bool>::s;
+  }
 }
+
+inline std::istream& operator>>(std::istream& is, picojson::value& x)
+{
+  picojson::set_last_error(std::string());
+  std::string err = picojson::parse(x, is);
+  if (! err.empty()) {
+    picojson::set_last_error(err);
+    is.setstate(std::ios::failbit);
+  }
+  return is;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const picojson::value& x)
+{
+  x.serialize(std::ostream_iterator<char>(os));
+  return os;
+}
+#ifdef _MSC_VER
+    #pragma warning(pop)
+#endif
 
 #endif
 #ifdef TEST_PICOJSON
+#ifdef _MSC_VER
+    #pragma warning(disable : 4127) // conditional expression is constant
+#endif
 
 using namespace std;
   
@@ -513,10 +656,9 @@ template <typename T> void is(const T& x, const T& y, const char* name = "")
 
 int main(void)
 {
-  plan(49);
+  plan(54);
   
-  
-#define TEST(in, type, cmp) {						\
+#define TEST(in, type, cmp, serialize_test) {				\
     picojson::value v;							\
     const char* s = in;							\
     string err = picojson::parse(v, s, s + strlen(s));			\
@@ -524,15 +666,19 @@ int main(void)
     ok(v.is<type>(), in " check type");					\
     is(v.get<type>(), cmp, in " correct output");			\
     is(*s, '\0', in " read to eof");					\
+    if (serialize_test) {						\
+      is(v.serialize(), string(in), in " serialize");			\
+    }									\
   }
-  TEST("false", bool, false);
-  TEST("true", bool, true);
-  TEST("90.5", double, 90.5);
-  TEST("\"hello\"", string, string("hello"));
-  TEST("\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"", string, string("\"\\/\b\f\n\r\t"));
+  TEST("false", bool, false, true);
+  TEST("true", bool, true, true);
+  TEST("90.5", double, 90.5, false);
+  TEST("\"hello\"", string, string("hello"), true);
+  TEST("\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"", string, string("\"\\/\b\f\n\r\t"),
+       true);
   TEST("\"\\u0061\\u30af\\u30ea\\u30b9\"", string,
-       string("a\xe3\x82\xaf\xe3\x83\xaa\xe3\x82\xb9"));
-  TEST("\"\\ud840\\udc0b\"", string, string("\xf0\xa0\x80\x8b"));
+       string("a\xe3\x82\xaf\xe3\x83\xaa\xe3\x82\xb9"), false);
+  TEST("\"\\ud840\\udc0b\"", string, string("\xf0\xa0\x80\x8b"), false);
 #undef TEST
 
 #define TEST(type, expr) {					       \
@@ -572,6 +718,7 @@ int main(void)
     ok(v.get("a").is<bool>(), "check property exists");
     is(v.get("a").get<bool>(), true,
        "check property value");
+    is(v.serialize(), string("{\"a\":true}"), "serialize object");
   }
   
   {

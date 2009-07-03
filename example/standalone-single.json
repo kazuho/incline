@@ -1,0 +1,12 @@
+[
+  {
+    "destination" : "incline_dest",
+    "source"      : "incline_src",
+    "pk_columns"  : {
+      "incline_src.id" : "_id"
+    },
+    "npk_columns" : {
+      "incline_src.message" : "_message"
+    }
+  }
+]

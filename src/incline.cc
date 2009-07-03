@@ -1,114 +1,110 @@
-extern "C" {
-#include <getopt.h>
-}
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include "getoptpp.h"
 #include "incline.h"
 
 using namespace std;
 
-static void usage(int argc, char** argv)
+static getoptpp::opt_str opt_mode('m', "mode", false, "mode", "standalone");
+static getoptpp::opt_str opt_source('s', "source", true, "definition file");
+static getoptpp::opt_str opt_rdbms('r', "rdbms", false, "rdbms name", "mysql");
+static getoptpp::opt_str opt_database('d', "database", true, "database name");
+
+static getoptpp::opt_str opt_mysql_host(0, "mysql-host", false, "mysql host",
+					"localhost");
+static getoptpp::opt_str opt_mysql_user(0, "mysql-user", false,
+					"mysql user", "root");
+static getoptpp::opt_str opt_mysql_password(0, "mysql-password", false,
+					    "mysql password", "");
+static getoptpp::opt_int opt_mysql_port(0, "mysql-port", false, "mysql port",
+					3306);
+
+static void run_all_stmt(tmd::conn_t dbh, const vector<string>& stmt)
 {
-  printf("Usage: %s --driver=d command\n", argv[0]);
-  exit(0);
+  for (vector<string>::const_iterator si = stmt.begin();
+       si != stmt.end();
+       ++si) {
+    tmd::execute(dbh, si->c_str());
+  }
 }
 
 int
 main(int argc, char** argv)
 {
-  string driver_name, source_file, command;
+  string command;
   picojson::value defs;
   
-  { // parse commond
-    static struct option longopts[] = {
-      { "driver", required_argument, NULL, 'd' },
-      { "source", required_argument, NULL, 's' },
-      { "help",   no_argument,       NULL, 'h' },
-      { NULL,     0,                 NULL, 0 },
-    };
-    int ch;
-    while ((ch = getopt_long(argc, argv, "d:h", longopts, NULL)) != -1) {
-      switch (ch) {
-      case 'd':
-	driver_name = optarg;
-	break;
-      case 's':
-	source_file = optarg;
-	break;
-      case 'h':
-	usage(argc, argv);
-	break;
-      default:
-	exit(1);
-	break;
-      }
-    }
-    argc -= optind;
-    argv += optind;
-    if (argc == 0) {
-      fprintf(stderr, "no command\n");
-      exit(1);
-    }
-    command = *argv++;
-    argc--;
-    if (driver_name.empty()) {
-      fprintf(stderr, "--driver not set\n");
-      exit(1);
-    }
-    if (source_file.empty()) {
-      fprintf(stderr, "--source not set\n");
-      exit(1);
-    }
-    { // parse source
-      string err;
-      if (source_file == "-") {
-	err = picojson::parse(defs, cin);
-      } else {
-	ifstream fin;
-	fin.open(source_file.c_str(), ios::in);
-	if (! fin.is_open()) {
-	  fprintf(stderr, "failed to open file:%s\n", source_file.c_str());
-	  exit(2);
-	}
-	err = picojson::parse(defs, fin);
-	fin.close();
-      }
-      if (! err.empty()) {
-	fprintf(stderr, "failed to parse: %s, %s\n", source_file.c_str(),
-		err.c_str());
-	exit(2);
-      }
-    }
-  }
-  
-  // create driver
-  incline_driver* driver;
-  if (driver_name == "standalone") {
-    driver = new incline_driver_standalone();
-  } else if (driver_name == "async_qtable") {
-    driver = new incline_driver_async_qtable();
-  } else {
-    fprintf(stderr, "unknown driver: %s\n", driver_name.c_str());
+  // parse command
+  getoptpp::opt_help opt_help('h', "help", argv[0], "load-triggers");
+  if (! getoptpp::getopt(argc, argv)) {
     exit(1);
   }
+  argc -= optind;
+  argv += optind;
+  if (argc == 0) {
+    cerr << "no command" << endl;
+    exit(1);
+  }
+  command = *argv++;
+  argc--;
   
-  // create manager and feed the settings
+  // create manager
+  incline_driver* driver;
+  if (*opt_mode == "standalone") {
+    driver = new incline_driver_standalone();
+  } else if (*opt_mode == "async_qtable") {
+    driver = new incline_driver_async_qtable();
+  } else {
+    cerr << "unknown mode:" << *opt_mode << endl;
+    exit(1);
+  }
   incline_mgr mgr(driver);
-  string err = mgr.parse(defs);
-  if (! err.empty()) {
-    fprintf(stderr, "failed to parse: %s, %s\n", source_file.c_str(),
-	    err.c_str());
-    exit(2);
+  
+  { // parse source
+    string err;
+    if (*opt_source == "-") {
+      err = picojson::parse(defs, cin);
+    } else {
+      ifstream fin;
+      fin.open(opt_source->c_str(), ios::in);
+      if (! fin.is_open()) {
+	cerr << "failed to open file:" << *opt_source << endl;
+	exit(2);
+      }
+      err = picojson::parse(defs, fin);
+      fin.close();
+    }
+    if (err.empty()) {
+      err = mgr.parse(defs);
+    }
+    if (! err.empty()) {
+      cerr << "failed to parse file:" << *opt_source << ": " << err << endl;
+      exit(3);
+    }
   }
   
+  // connect to database
+  if (*opt_rdbms != "mysql") {
+    cerr << "only mysql is supported" << endl;
+    exit(1);
+  }
+  tmd::conn_t dbh(*opt_mysql_host, *opt_mysql_user, *opt_mysql_password,
+		  *opt_database, *opt_mysql_port);
+  
   // handle the command
-  if (command == "print-trigger") {
+  if (command == "create-trigger") {
     vector<string> stmt(mgr.create_trigger_all(true));
-    printf("DELIMITER |\n");
-    fputs(incline_util::join("|\n", stmt.begin(), stmt.end()).c_str(),
-	  stdout);
-    printf("\nDELIMTER ;\n");
+    run_all_stmt(dbh, stmt);
+  } else if (command == "drop-trigger") {
+    vector<string> stmt(mgr.drop_trigger_all(true));
+    run_all_stmt(dbh, stmt);
+  } else if (command == "print-trigger") {
+    vector<string> stmt(mgr.create_trigger_all(true));
+    picojson::value a(picojson::array_type, false);
+    copy(stmt.begin(), stmt.end(), back_inserter(a.get<picojson::array>()));
+    a.serialize(ostream_iterator<char>(cout));
+    cout << endl;
   } else {
     fprintf(stderr, "unknown command: %s\n", command.c_str());
     exit(1);

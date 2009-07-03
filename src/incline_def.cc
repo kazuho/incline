@@ -47,12 +47,12 @@ incline_def::build_merge_cond(const string& tbl_rewrite_from,
       continue;
     }
     if (first_tbl == tbl_rewrite_from) {
-      cond.push_back(tbl_rewrite_to + '.'
-		     + mi->first.substr(first_tbl.size() + 1) + '='
+      cond.push_back(tbl_rewrite_to
+		     + mi->first.substr(first_tbl.size()) + '='
 		     + mi->second);
     } else if (second_tbl == tbl_rewrite_from) {
       cond.push_back(mi->first + '=' + tbl_rewrite_to
-		     + mi->second.substr(second_tbl.size() + 1));
+		     + mi->second.substr(second_tbl.size()));
     } else {
       cond.push_back(mi->first + '=' + mi->second);
     }
@@ -93,7 +93,8 @@ incline_def::parse(const picojson::value& def)
       return err;
     }
     // get npk_columns
-    if (! (err = _parse_columns(def, "npk_columns", npk_columns_)).empty()) {
+    if (! def.get("npk_columns").is<picojson::undefined>()
+	&& ! (err = _parse_columns(def, "npk_columns", npk_columns_)).empty()) {
       return err;
     }
   }
