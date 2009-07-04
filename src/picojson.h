@@ -327,13 +327,13 @@ namespace picojson {
     int line_;
   public:
     input(const Iter& first, const Iter& last) : cur_(first), end_(last), last_ch_(-1), ungot_(false), line_(1) {}
-    bool eof() const { return cur_ == end_ && ! ungot_; }
     int getc() {
       if (ungot_) {
 	ungot_ = false;
 	return last_ch_;
       }
       if (cur_ == end_) {
+	last_ch_ = -1;
 	return -1;
       }
       if (last_ch_ == '\n') {
@@ -351,36 +351,32 @@ namespace picojson {
     Iter cur() const { return cur_; }
     int line() const { return line_; }
     void skip_ws() {
-      while (! eof()) {
-	if (! isspace(getc())) {
+      while (1) {
+	int ch = getc();
+	if (! (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r')) {
 	  ungetc();
 	  break;
 	}
       }
     }
-    enum {
-      error,
-      negative,
-      positive
-    };
-    int match(const std::string& pattern) {
+    int expect(int expect) {
       skip_ws();
-      std::string::const_iterator pi(pattern.begin());
-      for (; pi != pattern.end(); ++pi) {
-	if (eof()) {
-	  break;
-	} else if (getc() != *pi) {
+      if (getc() != expect) {
+	ungetc();
+	return false;
+      }
+      return true;
+    }
+    bool match(const std::string& pattern) {
+      for (std::string::const_iterator pi(pattern.begin());
+	   pi != pattern.end();
+	   ++pi) {
+	if (getc() != *pi) {
 	  ungetc();
-	  break;
+	  return false;
 	}
       }
-      if (pi == pattern.end()) {
-	return positive;
-      } else if (pi == pattern.begin()) {
-	return negative;
-      } else {
-	return error;
-      }
+      return true;
     }
   };
   
@@ -397,6 +393,7 @@ namespace picojson {
       } else if ('a' <= hex && hex <= 'f') {
 	hex -= 'a' - 0xa;
       } else {
+	in.ungetc();
 	return -1;
       }
       uni_ch = uni_ch * 16 + hex;
@@ -416,6 +413,7 @@ namespace picojson {
       }
       // first 16-bit of surrogate pair, get the next one
       if (in.getc() != '\\' || in.getc() != 'u') {
+	in.ungetc();
 	return false;
       }
       int second = _parse_quadhex(in);
@@ -448,9 +446,12 @@ namespace picojson {
     // gcc 4.1 cannot compile if the below two lines are merged into one :-(
     out = value(string_type, false);
     std::string& s = out.get<std::string>();
-    while (! in.eof()) {
+    while (1) {
       int ch = in.getc();
-      if (ch == '"') {
+      if (ch < ' ') {
+	in.ungetc();
+	return false;
+      } else if (ch == '"') {
 	return true;
       } else if (ch == '\\') {
 	if ((ch = in.getc()) == -1) {
@@ -485,7 +486,7 @@ namespace picojson {
   template <typename Iter> static bool _parse_array(value& out, input<Iter>& in) {
     out = value(array_type, false);
     array& a = out.get<array>();
-    if (in.match("]") == input<Iter>::positive) {
+    if (in.expect(']')) {
       return true;
     }
     do {
@@ -493,33 +494,33 @@ namespace picojson {
       if (! _parse(a.back(), in)) {
 	return false;
       }
-    } while (in.match(",") == input<Iter>::positive);
-    return in.match("]") == input<Iter>::positive;
+    } while (in.expect(','));
+    return in.expect(']');
   }
   
   template <typename Iter> static bool _parse_object(value& out, input<Iter>& in) {
     out = value(object_type, false);
     object& o = out.get<object>();
-    if (in.match("}") == input<Iter>::positive) {
+    if (in.expect('}')) {
       return true;
     }
     do {
       value key, val;
-      if (in.match("\"") == input<Iter>::positive
+      if (in.expect('"')
 	  && _parse_string(key, in)
-	  && in.match(":") == input<Iter>::positive
+	  && in.expect(':')
 	  && _parse(val, in)) {
 	o[key.to_str()] = val;
       } else {
 	return false;
       }
-    } while (in.match(",") == input<Iter>::positive);
-    return in.match("}") == input<Iter>::positive;
+    } while (in.expect(','));
+    return in.expect('}');
   }
   
   template <typename Iter> static bool _parse_number(value& out, input<Iter>& in) {
     std::string num_str;
-    while (! in.eof()) {
+    while (1) {
       int ch = in.getc();
       if (('0' <= ch && ch <= '9') || ch == '+' || ch == '-' || ch == '.'
 	  || ch == 'e' || ch == 'E') {
@@ -535,35 +536,36 @@ namespace picojson {
   }
   
   template <typename Iter> static bool _parse(value& out, input<Iter>& in) {
-    int ret = input<Iter>::negative;
-#define IS(p)						\
-    (ret == input<Iter>::negative			\
-     && (ret = in.match(p)) == input<Iter>::positive)
-    if (IS("undefined")) {
-      out = value();
-    } else if (IS("null")) {
-      out = value(null_type, false);
-    } else if (IS("false")) {
-      out = false;
-    } else if (IS("true")) {
-      out = true;
-    } else if (IS("\"")) {
-      return _parse_string(out, in);
-    } else if (IS("[")) {
-      return _parse_array(out, in);
-    } else if (IS("{")) {
-      return _parse_object(out, in);
-    } else {
-      int ch = in.getc();
-      if (ch != -1) {
-	in.ungetc();
-	if (('0' <= ch && ch <= '9') || ch == '-') {
-	  return _parse_number(out, in);
-	}
+    in.skip_ws();
+    int ch = in.getc();
+    switch (ch) {
+#define IS(ch, text, val) case ch: \
+      if (in.match(text)) { \
+	out = val; \
+	return true; \
+      } else { \
+	return false; \
       }
-    }
+      IS('u', "ndefined", value());
+      IS('n', "ull", value(null_type, false));
+      IS('f', "alse", value(false));
+      IS('t', "rue", value(true));
 #undef IS
-    return ret == input<Iter>::positive;
+    case '"':
+      return _parse_string(out, in);
+    case '[':
+      return _parse_array(out, in);
+    case '{':
+      return _parse_object(out, in);
+    default:
+      if (('0' <= ch && ch <= '9') || ch == '-') {
+	in.ungetc();
+	return _parse_number(out, in);
+      }
+      break;
+    }
+    in.ungetc();
+    return false;
   }
   
   template <typename Iter> static std::string parse(value& out, Iter& pos, const Iter& last) {
@@ -575,12 +577,13 @@ namespace picojson {
       char buf[64];
       SNPRINTF(buf, sizeof(buf), "syntax error at line %d near: ", in.line());
       err = buf;
-      while (! in.eof()) {
+      while (1) {
 	int ch = in.getc();
-	if (ch == '\n') {
+	if (ch == -1 || ch == '\n') {
 	  break;
+	} else if (ch >= ' ') {
+	  err += ch;
 	}
-	err += ch;
       }
     }
     pos = in.cur();
@@ -656,7 +659,7 @@ template <typename T> void is(const T& x, const T& y, const char* name = "")
 
 int main(void)
 {
-  plan(54);
+  plan(57);
   
 #define TEST(in, type, cmp, serialize_test) {				\
     picojson::value v;							\
@@ -720,13 +723,18 @@ int main(void)
        "check property value");
     is(v.serialize(), string("{\"a\":true}"), "serialize object");
   }
-  
-  {
-    picojson::value v;
-    const char *s = "falsoooo";
-    string err = picojson::parse(v, s, s + strlen(s));
-    is(err, string("syntax error at line 1 near: oooo"), "error message");
-  }
+
+#define TEST(json, msg) do {				\
+    picojson::value v;					\
+    const char *s = json;				\
+    string err = picojson::parse(v, s, s + strlen(s));	\
+    is(err, string("syntax error at line " msg), msg);	\
+  } while (0)
+  TEST("falsoa", "1 near: oa");
+  TEST("{]", "1 near: ]");
+  TEST("\n\bbell", "2 near: bell");
+  TEST("\"abc\nd\"", "1 near: ");
+#undef TEST
   
   return 0;
 }
