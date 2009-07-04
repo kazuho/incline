@@ -14,11 +14,11 @@ my $dbh = DBI->connect('dbi:mysql:test;user=root')
 ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")
     for qw/incline_dest incline_src/;
 ok(
-    $dbh->do('CREATE TABLE incline_dest (_id INT UNSIGNED NOT NULL,_message VARCHAR(255) NOT NULL,PRIMARY KEY(_id))'),
+    $dbh->do('CREATE TABLE incline_dest (_id INT UNSIGNED NOT NULL,_message VARCHAR(255) NOT NULL,PRIMARY KEY(_id)) ENGINE=InnoDB'),
     'create dest table',
 );
 ok(
-    $dbh->do('CREATE TABLE incline_src (id INT UNSIGNED NOT NULL AUTO_INCREMENT,message VARCHAR(255) NOT NULL,PRIMARY KEY (id))'),
+    $dbh->do('CREATE TABLE incline_src (id INT UNSIGNED NOT NULL AUTO_INCREMENT,message VARCHAR(255) NOT NULL,PRIMARY KEY (id)) ENGINE=InnoDB'),
     'create dest table',
 );
 
