@@ -93,7 +93,7 @@ incline_def::parse(const picojson::value& def)
       return err;
     }
     // get npk_columns
-    if (! def.get("npk_columns").is<picojson::undefined>()
+    if (! def.get("npk_columns").is<picojson::null>()
 	&& ! (err = _parse_columns(def, "npk_columns", npk_columns_)).empty()) {
       return err;
     }
