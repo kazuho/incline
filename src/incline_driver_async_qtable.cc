@@ -225,7 +225,7 @@ void incline_driver_async_qtable::forwarder::_run() const
 		   + ") VALUES ("
 		   + incline_util::join(',', values.begin(), values.end())
 		   + ')');
-  } else {
+    } else {
       // delete the row
       vector<string> dcond;
       for (size_t i = 0; i < dest_pk_columns_.size(); ++i) {
