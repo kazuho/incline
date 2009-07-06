@@ -83,10 +83,13 @@ incline_driver_async_qtable::_create_table_of(const incline_def_async_qtable*
   for (map<string, string>::const_iterator pi = def->pk_columns().begin();
        pi != def->pk_columns().end();
        ++pi) {
+    string table_name = incline_def::table_of_column(pi->first);
+    string column_name = pi->first.substr(table_name.size() + 1);
     tmd::query_t res(dbh,
-		     "SELECT COLUMN_TYPE,CHARACTER_SET_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='%s' AND CONCAT(TABLE_NAME,'.',COLUMN_NAME)='%s'",
+		     "SELECT COLUMN_TYPE,CHARACTER_SET_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s' AND COLUMN_NAME='%s'",
 		     tmd::escape(dbh, mgr_->db_name()).c_str(),
-		     tmd::escape(dbh, pi->first).c_str());
+		     tmd::escape(dbh, table_name).c_str(),
+		     tmd::escape(dbh, column_name).c_str());
     if (res.fetch().eof()) {
       // TODO throw an exception instead
       cerr << "failed to obtain column definition of: " << pi->first << endl;
