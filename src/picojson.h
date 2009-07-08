@@ -374,7 +374,7 @@ namespace picojson {
     }
   };
   
-  template<typename Iter> static int _parse_quadhex(input<Iter> &in) {
+  template<typename Iter> inline int _parse_quadhex(input<Iter> &in) {
     int uni_ch = 0, hex;
     for (int i = 0; i < 4; i++) {
       if ((hex = in.getc()) == -1) {
@@ -395,7 +395,7 @@ namespace picojson {
     return uni_ch;
   }
   
-  template<typename Iter> static bool _parse_codepoint(std::string& out, input<Iter>& in) {
+  template<typename Iter> inline bool _parse_codepoint(std::string& out, input<Iter>& in) {
     int uni_ch;
     if ((uni_ch = _parse_quadhex(in)) == -1) {
       return false;
@@ -436,7 +436,7 @@ namespace picojson {
     return true;
   }
   
-  template<typename Iter> static bool _parse_string(value& out, input<Iter>& in) {
+  template<typename Iter> inline bool _parse_string(value& out, input<Iter>& in) {
     // gcc 4.1 cannot compile if the below two lines are merged into one :-(
     out = value(string_type, false);
     std::string& s = out.get<std::string>();
@@ -477,7 +477,7 @@ namespace picojson {
     return false;
   }
   
-  template <typename Iter> static bool _parse_array(value& out, input<Iter>& in) {
+  template <typename Iter> inline bool _parse_array(value& out, input<Iter>& in) {
     out = value(array_type, false);
     array& a = out.get<array>();
     if (in.expect(']')) {
@@ -492,7 +492,7 @@ namespace picojson {
     return in.expect(']');
   }
   
-  template <typename Iter> static bool _parse_object(value& out, input<Iter>& in) {
+  template <typename Iter> inline bool _parse_object(value& out, input<Iter>& in) {
     out = value(object_type, false);
     object& o = out.get<object>();
     if (in.expect('}')) {
@@ -512,7 +512,7 @@ namespace picojson {
     return in.expect('}');
   }
   
-  template <typename Iter> static bool _parse_number(value& out, input<Iter>& in) {
+  template <typename Iter> inline bool _parse_number(value& out, input<Iter>& in) {
     std::string num_str;
     while (1) {
       int ch = in.getc();
@@ -529,7 +529,7 @@ namespace picojson {
     return endp == num_str.c_str() + num_str.size();
   }
   
-  template <typename Iter> static bool _parse(value& out, input<Iter>& in) {
+  template <typename Iter> inline bool _parse(value& out, input<Iter>& in) {
     in.skip_ws();
     int ch = in.getc();
     switch (ch) {
@@ -561,31 +561,36 @@ namespace picojson {
     return false;
   }
   
-  template <typename Iter> static std::string parse(value& out, Iter& pos, const Iter& last) {
-    // setup
-    input<Iter> in(pos, last);
+  // obsolete, use the version below
+  template <typename Iter> inline std::string parse(value& out, Iter& pos, const Iter& last) {
     std::string err;
-    // do
-    if (! _parse(out, in)) {
+    pos = parse(out, pos, last, &err);
+    return err;
+  }
+  
+  template <typename Iter> inline Iter parse(value& out, const Iter& first, const Iter& last, std::string* err) {
+    input<Iter> in(first, last);
+    if (! _parse(out, in) && err != NULL) {
       char buf[64];
       SNPRINTF(buf, sizeof(buf), "syntax error at line %d near: ", in.line());
-      err = buf;
+      *err = buf;
       while (1) {
 	int ch = in.getc();
 	if (ch == -1 || ch == '\n') {
 	  break;
 	} else if (ch >= ' ') {
-	  err += ch;
+	  err->push_back(ch);
 	}
       }
     }
-    pos = in.cur();
-    return err;
+    return in.cur();
   }
   
-  inline static std::string parse(value& out, std::istream& is) {
-    std::istreambuf_iterator<char> ii(is.rdbuf());
-    return parse(out, ii, std::istreambuf_iterator<char>());
+  inline std::string parse(value& out, std::istream& is) {
+    std::string err;
+    parse(out, std::istreambuf_iterator<char>(is.rdbuf()),
+	  std::istreambuf_iterator<char>(), &err);
+    return err;
   }
   
   template <typename T> struct last_error_t {
