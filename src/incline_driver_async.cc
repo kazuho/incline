@@ -24,15 +24,15 @@ incline_driver_async::_build_insert_from_def(const incline_def* _def,
   string de_col = def->direct_expr_column(src_table, "NEW");
   if (! de_col.empty()) {
     if (strncmp(de_col.c_str(), "NEW.", 4) == 0) {
-      r.push_back("IF (" + do_build_direct_expr(de_col) + ") THEN");
+      r.push_back("IF (" + do_build_direct_expr(de_col) + ") THEN\\");
       incline_util::push_back(r,
 			      super::_build_insert_from_def(def, src_table,
 							    command, cond),
 			      "  ");
-      r.push_back("ELSE");
+      r.push_back("ELSE\\");
       incline_util::push_back(r, _build_enqueue_sql(def, src_table, "NEW"),
 			      "  ");
-      r.push_back("END IF");
+      r.push_back("END IF\\");
     } else {
       string direct_expr = do_build_direct_expr(de_col);
       vector<string> cond_and_dexpr(cond);
@@ -64,16 +64,16 @@ incline_driver_async::_build_delete_from_def(const incline_def* _def,
   string de_col = def->direct_expr_column(src_table, "OLD");
   if (! de_col.empty()) {
     if (strncmp(de_col.c_str(), "OLD.", 4) == 0) {
-      r.push_back("IF (" + do_build_direct_expr(de_col) + ") THEN");
+      r.push_back("IF (" + do_build_direct_expr(de_col) + ") THEN\\");
       incline_util::push_back(r,
 			      super::_build_delete_from_def(def, src_table,
 							    cond),
 			      "  ");
-      r.push_back("ELSE");
+      r.push_back("ELSE\\");
       incline_util::push_back(r,
 			      _build_enqueue_sql(def, src_table, "OLD"),
 			      "   ");
-      r.push_back("END IF");
+      r.push_back("END IF\\");
     } else {
       std::string direct_expr = do_build_direct_expr(de_col);
       vector<string> cond_and_dexpr(cond);
@@ -104,15 +104,18 @@ incline_driver_async::_build_update_merge_from_def(const incline_def* _def,
   vector<string> r;
   string de_col = def->direct_expr_column(src_table);
   if (! de_col.empty()) {
-    string dest_direct_expr = do_build_direct_expr(de_col);
     vector<string> cond_and_dexpr(cond);
-    cond_and_dexpr.push_back(dest_direct_expr);
+    cond_and_dexpr.push_back(do_build_direct_expr(de_col));
     incline_util::push_back(r, 
 			    super::_build_update_merge_from_def(def, src_table,
 								cond_and_dexpr)
 			    );
     cond_and_dexpr.pop_back();
-    cond_and_dexpr.push_back(string("! (") + dest_direct_expr + ')');
+    de_col = def->direct_expr_column(src_table, src_table);
+    
+    cond_and_dexpr.push_back(string("! (")
+			     + do_build_direct_expr(def->direct_expr_column(src_table, src_table))
+			     + ')');
     incline_util::push_back(r, 
 			    _build_enqueue_sql(def, src_table, "NEW",
 					       cond_and_dexpr));

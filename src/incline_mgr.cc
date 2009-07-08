@@ -145,7 +145,12 @@ incline_mgr::build_trigger_stmt(const string& src_table, const string& event,
   for (vector<string>::const_iterator bi = body.begin();
        bi != body.end();
        ++bi) {
-    r += string("  ") + *bi + ";\n";
+    r += "  ";
+    if (! bi->empty() && (*bi)[bi->size() - 1] == '\\') {
+      r += bi->substr(0, bi->size() - 1) + "\n";
+    } else {
+      r += *bi + ";\n";
+    }
   }
   r += "END";
   return incline_util::vectorize(r);
