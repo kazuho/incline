@@ -3,6 +3,22 @@
 using namespace std;
 
 string
+incline_def_async::parse(const picojson::value& def)
+{
+  string err = super::parse(def);
+  if (! err.empty()) {
+    return err;
+  }
+  // post init
+  if (! direct_expr_column_.empty()
+      && (pk_columns().find(source_column_of(direct_expr_column_))
+	  == pk_columns().end())) {
+    return "TODO write error message";
+  }
+  return string();
+}
+
+string
 incline_def_async::direct_expr_column(const string& desired_table,
 				      const string& table_rewrite_to) const
 {

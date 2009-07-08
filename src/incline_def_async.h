@@ -10,6 +10,7 @@ protected:
   std::string direct_expr_column_;
 public:
   std::string direct_expr_column(const std::string& desired_table, const std::string& table_rewrite_to = std::string()) const;
+  virtual std::string parse(const picojson::value& def);
 protected:
   void set_direct_expr_column(const std::string& col) {
     direct_expr_column_ = col;
