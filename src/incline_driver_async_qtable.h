@@ -32,7 +32,7 @@ public:
   public:
     static void* run(void* fw);
   };
-    friend class forwarder;
+  friend class forwarder;
 public:
   virtual incline_def* create_def() const;
   std::vector<std::string> create_table_all(bool if_not_exists, tmd::conn_t& dbh) const;

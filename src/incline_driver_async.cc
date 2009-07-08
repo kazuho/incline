@@ -152,7 +152,7 @@ incline_driver_async::_build_enqueue_sql(const incline_def_async* def,
 }
 
 string
-incline_driver_async::do_build_direct_expr(const string& direct_expr_column)
+incline_driver_async::do_build_direct_expr(const string& column_expr)
   const
 {
   // does not support mixed-mode unless overridden

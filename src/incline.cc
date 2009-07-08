@@ -11,6 +11,9 @@ static getoptpp::opt_str opt_source('s', "source", true, "definition file");
 static getoptpp::opt_str opt_rdbms('r', "rdbms", false, "rdbms name", "mysql");
 static getoptpp::opt_str opt_database('d', "database", true, "database name");
 
+static getoptpp::opt_str opt_sharded_source('S', "sharded-source", false,
+					    "shard definition file", "");
+
 static getoptpp::opt_str opt_mysql_host(0, "mysql-host", false, "mysql host",
 					"localhost");
 static getoptpp::opt_str opt_mysql_user(0, "mysql-user", false,
@@ -33,18 +36,30 @@ static void run_all_stmt(tmd::conn_t& dbh, const vector<string>& stmt)
 
 inline incline_driver_async_qtable* aq_driver()
 {
-  if (*opt_mode != "queue-table") {
-    cerr << "command only supported under queue-table mode" << endl;
+  if (dynamic_cast<incline_driver_async_qtable*>(mgr->driver()) == NULL) {
+    cerr
+      << "command only supported under following mode(s): queue-table, sharded"
+      << endl;
     exit(1);
   }
   return static_cast<incline_driver_async_qtable*>(mgr->driver());
+}
+
+inline incline_driver_sharded* sharded_driver()
+{
+  if (dynamic_cast<incline_driver_sharded*>(mgr->driver()) == NULL) {
+    cerr
+      << "command only supported under following mode(s): sharded"
+      << endl;
+    exit(1);
+  }
+  return static_cast<incline_driver_sharded*>(mgr->driver());
 }
 
 int
 main(int argc, char** argv)
 {
   string command;
-  picojson::value defs;
   
   // parse command
   getoptpp::opt_help opt_help('h', "help", argv[0], "load-triggers");
@@ -66,6 +81,8 @@ main(int argc, char** argv)
       driver = new incline_driver_standalone();
     } else if (*opt_mode == "queue-table") {
       driver = new incline_driver_async_qtable();
+    } else if (*opt_mode == "sharded") {
+      driver = new incline_driver_sharded();
     } else {
       cerr << "unknown mode:" << *opt_mode << endl;
       exit(1);
@@ -74,6 +91,7 @@ main(int argc, char** argv)
   }
   
   { // parse source
+    picojson::value defs;
     string err;
     if (*opt_source == "-") {
       err = picojson::parse(defs, cin);
@@ -92,6 +110,35 @@ main(int argc, char** argv)
     }
     if (! err.empty()) {
       cerr << "failed to parse file:" << *opt_source << ": " << err << endl;
+      exit(3);
+    }
+  }
+  
+  // parse sharded_source
+  if (*opt_mode == "sharded") {
+    picojson::value sharded_def;
+    string err;
+    if (opt_sharded_source->empty()) {
+      cerr << "no --sharded-source" << endl;
+      exit(1);
+    } else if (*opt_sharded_source == "-") {
+      err = picojson::parse(sharded_def, cin);
+    } else {
+      ifstream fin;
+      fin.open(opt_sharded_source->c_str(), ios::in);
+      if (! fin.is_open()) {
+	cerr << "failed to open file:" << *opt_sharded_source << endl;
+	exit(2);
+      }
+      err = picojson::parse(sharded_def, fin);
+      fin.close();
+    }
+    if (err.empty()) {
+      err = sharded_driver()->parse_sharded_def(sharded_def);
+    }
+    if (! err.empty()) {
+      cerr << "failed to parse file:" << *opt_sharded_source << ": " << err
+	   << endl;
       exit(3);
     }
   }
