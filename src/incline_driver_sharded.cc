@@ -54,7 +54,8 @@ namespace incline_driver_sharded_ns {
 	     = map.get<picojson::object>().begin();
 	   mi != map.get<picojson::object>().end();
 	   ++mi) {
-	lb_hostport_[str_to_key_type<KEYTYPE>()(mi->first)] = mi->second;
+    	lb_hostport_[str_to_key_type<KEYTYPE>()(mi->first)]
+	  = mi->second.to_str();
       }
       return string();
     }
@@ -81,20 +82,14 @@ namespace incline_driver_sharded_ns {
 	}
       }
       assert(i != lb_hostport_.end());
-      vector<string> cond;
-      if (i != lb_hostport_.begin()) {
-	cond.push_back(key_type_to_str<KEYTYPE>()(i->first) + "<="
-		       + column_expr);
-      }
+      string cond;
+      cond += key_type_to_str<KEYTYPE>()(i->first) + "<=" + column_expr;
       ++i;
       if (i != lb_hostport_.end()) {
-	cond.push_back(column_expr + '<'
-		       + key_type_to_str<KEYTYPE>()(i->first));
+	cond += string(" AND ") + column_expr + '<'
+	  + key_type_to_str<KEYTYPE>()(i->first);
       }
-      return cond.empty()
-	? string()
-	: (string("(")
-	   + incline_util::join(" AND ", cond.begin(), cond.end()) + ')');
+      return cond;
     }
   };
   
@@ -132,7 +127,23 @@ incline_driver_sharded::parse_sharded_def(const picojson::value& def)
 }
 
 string
-incline_driver_sharded::do_build_direct_expr(const string& column_expr)
+incline_driver_sharded::set_hostport(const string& hostport)
+{
+  vector<string> all_hp = rule_->get_all_hostport();
+  for (vector<string>::const_iterator i = all_hp.begin();
+       i != all_hp.end();
+       ++i) {
+    if (*i == hostport) {
+      cur_hostport_ = hostport;
+      return string();
+    }
+  }
+  // not found
+  return "specified database does not exist in shard definition:" + hostport;
+}
+
+string
+incline_driver_sharded::do_build_direct_expr(const string& column_expr) const
 {
   return rule_->build_direct_expr(column_expr, cur_hostport_);
 }

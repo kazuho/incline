@@ -24,9 +24,9 @@ public:
   virtual incline_def* create_def() const;
   std::string parse_sharded_def(const picojson::value& def);
   const rule* get_rule() const { return rule_; }
-  void set_hostport(const std::string& hostport) { cur_hostport_ = hostport; }
+  std::string set_hostport(const std::string& hostport);
 protected:
-  virtual std::string do_build_direct_expr(const std::string& column_expr);
+  virtual std::string do_build_direct_expr(const std::string& column_expr) const;
 };
 
 #endif

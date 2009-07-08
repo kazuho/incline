@@ -1,6 +1,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <sstream>
 #include "getoptpp.h"
 #include "incline.h"
 
@@ -15,7 +16,7 @@ static getoptpp::opt_str opt_sharded_source('S', "sharded-source", false,
 					    "shard definition file", "");
 
 static getoptpp::opt_str opt_mysql_host(0, "mysql-host", false, "mysql host",
-					"localhost");
+					"127.0.0.1");
 static getoptpp::opt_str opt_mysql_user(0, "mysql-user", false,
 					"mysql user", "root");
 static getoptpp::opt_str opt_mysql_password(0, "mysql-password", false,
@@ -140,6 +141,15 @@ main(int argc, char** argv)
       cerr << "failed to parse file:" << *opt_sharded_source << ": " << err
 	   << endl;
       exit(3);
+    }
+    {
+      stringstream ss;
+      ss << *opt_mysql_host << ':' << *opt_mysql_port;
+      err = sharded_driver()->set_hostport(ss.str());
+      if (! err.empty()) {
+	cerr << err << endl;
+	exit(3);
+      }
     }
   }
   
