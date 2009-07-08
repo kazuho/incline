@@ -162,6 +162,14 @@ incline_def::_parse_columns(const picojson::value& def,
   return string();
 }
 
+string
+incline_def::source_column_of(const string& dest_column) const
+{
+  map<string, string>::const_iterator di = dest_columns_.find(dest_column);
+  assert(di != dest_columns_.end());
+  return di->second;
+}
+
 void
 incline_def::_rebuild_columns()
 {

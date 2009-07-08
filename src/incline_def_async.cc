@@ -3,50 +3,31 @@
 using namespace std;
 
 string
-incline_def_async::direct_expr(const string& col_expr) const
+incline_def_async::direct_expr_column(const string& desired_table,
+				      const string& table_rewrite_to) const
 {
-  string r;
-  for (string::const_iterator ei = direct_expr_base_.begin();
-       ei != direct_expr_base_.end();
-       ++ei) {
-    if (*ei == '?') {
-      if (ei + 1 != direct_expr_base_.end() && *(ei + 1) == '?') {
-	r += '?';
-	++ei;
-      } else {
-	r += col_expr;
-      }
-    } else {
-      r += *ei;
+  if (direct_expr_column_.empty()) {
+    return string();
+  } else if (table_rewrite_to.empty()) {
+    return direct_expr_column_;
+  }
+  
+  string src_column = source_column_of(direct_expr_column_);
+  if (table_of_column(src_column) == desired_table) {
+    return table_rewrite_to + src_column.substr(desired_table.size());
+  }
+  // TODO currently only follows inner join conds of 1 depth
+  for (vector<pair<string, string> >::const_iterator mi = merge_.begin();
+       mi != merge_.end();
+       ++mi) {
+    if (mi->first == src_column
+	&& table_of_column(mi->second) == desired_table) {
+      return table_rewrite_to + mi->second.substr(desired_table.size());
+    }
+    if (mi->second == src_column
+	&& table_of_column(mi->first) == desired_table) {
+      return table_rewrite_to + mi->first.substr(desired_table.size());
     }
   }
-  return r;   
-}
-
-string
-incline_def_async::parse(const picojson::value& def)
-{
-  string err = super::parse(def);
-  if (! err.empty()) {
-    return err;
-  }
-  // post init
-  if (direct_expr_column_.empty() != direct_expr_base_.empty()) {
-    return "properties \"direct_expr\" and \"direct_expr_column\" should be used together";
-  }
-  return string();
-}
-
-string
-incline_def_async::do_parse_property(const string& name,
-				     const picojson::value& value)
-{
-  if (name == "direct_expr") {
-    direct_expr_base_ = value.to_str();
-  } else if (name == "direct_expr_column") {
-    direct_expr_column_ = value.to_str();
-  } else {
-    return super::do_parse_property(name, value);
-  }
-  return string();
+  return src_column;
 }

@@ -32,6 +32,7 @@ public:
   const std::map<std::string, std::string>& dest_columns() const { return dest_columns_; }
   bool is_master_of(const std::string& table) const;
   bool is_dependent_of(const std::string& table) const;
+  std::string source_column_of(const std::string& dest_column) const;
   std::vector<std::string> build_merge_cond(const std::string& tbl_rewrite_from, const std::string& tbl_rewrite_to, bool master_only = false) const;
   // parser
   virtual std::string parse(const picojson::value& def);
