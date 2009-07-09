@@ -82,7 +82,7 @@ incline_driver_async::_build_delete_from_def(const incline_def* _def,
 			      super::_build_delete_from_def(def, src_table,
 							    cond_and_dexpr));
       cond_and_dexpr.pop_back();
-      cond_and_dexpr.push_back(string("! (") +  direct_expr + ")");
+      cond_and_dexpr.push_back("! (" +  direct_expr + ")");
       incline_util::push_back(r,
 			      _build_enqueue_sql(def, src_table, "OLD",
 						 cond_and_dexpr));
@@ -113,7 +113,7 @@ incline_driver_async::_build_update_merge_from_def(const incline_def* _def,
     cond_and_dexpr.pop_back();
     de_col = def->direct_expr_column(src_table, src_table);
     
-    cond_and_dexpr.push_back(string("! (")
+    cond_and_dexpr.push_back("! ("
 			     + do_build_direct_expr(def->direct_expr_column(src_table, src_table))
 			     + ')');
     incline_util::push_back(r, 

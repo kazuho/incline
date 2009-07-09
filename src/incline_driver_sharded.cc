@@ -94,7 +94,7 @@ namespace incline_driver_sharded_ns {
       cond += key_type_to_str<KEYTYPE>()(i->first) + "<=" + column_expr;
       ++i;
       if (i != lb_hostport_.end()) {
-	cond += string(" AND ") + column_expr + '<'
+	cond += " AND " + column_expr + '<'
 	  + key_type_to_str<KEYTYPE>()(i->first);
       }
       return cond;
@@ -125,7 +125,7 @@ incline_driver_sharded::parse_sharded_def(const picojson::value& def)
   RANGE_ALGO("string", string);
 #undef RANGE_ALGO
   if (rule_ == NULL) {
-    return string("unknown sharding algorithm: ") + algo;
+    return "unknown sharding algorithm: " + algo;
   }
   // build the rule
   return rule_->parse(def);

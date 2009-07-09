@@ -70,7 +70,7 @@ incline_driver_standalone::_build_insert_from_def(const incline_def* def,
        ci != def->columns().end();
        ++ci) {
     src_cols.push_back(incline_def::table_of_column(ci->first) == src_table
-		       ? string("NEW") + ci->first.substr(src_table.size())
+		       ? "NEW" + ci->first.substr(src_table.size())
 		       : ci->first);
     dest_cols.push_back(ci->second);
   }
@@ -86,14 +86,13 @@ incline_driver_standalone::_build_insert_from_def(const incline_def* def,
 	join_tables.push_back(*si);
       }
     }
-    sql += string(" FROM ")
+    sql += " FROM "
       + incline_util::join(" INNER JOIN ", join_tables.begin(),
 			   join_tables.end());
     incline_util::push_back(cond, def->build_merge_cond(src_table, "NEW"));
   }
   if (! cond.empty()) {
-    sql += string(" WHERE ")
-      + incline_util::join(" AND ", cond.begin(), cond.end());
+    sql += " WHERE " + incline_util::join(" AND ", cond.begin(), cond.end());
   }
   return incline_util::vectorize(sql);
 }
@@ -113,7 +112,7 @@ incline_driver_standalone::_build_delete_from_def(const incline_def* def,
 		     + pi->first.substr(src_table.size() + 1));
     }
   }
-  string sql = string("DELETE FROM ") + def->destination() + " WHERE "
+  string sql = "DELETE FROM " + def->destination() + " WHERE "
     + incline_util::join(" AND ", cond.begin(), cond.end());
   return incline_util::vectorize(sql);
 }
@@ -134,7 +133,7 @@ incline_driver_standalone::_build_update_merge_from_def(const incline_def* def,
     }
   }
   incline_util::push_back(cond, _merge_cond_of(def, src_table));
-  string sql = string("UPDATE ") + def->destination() + " SET "
+  string sql = "UPDATE " + def->destination() + " SET "
     + incline_util::join(',', set_expr.begin(), set_expr.end()) + " WHERE "
     + incline_util::join(" AND ", cond.begin(), cond.end());
   return incline_util::vectorize(sql);

@@ -13,8 +13,8 @@ incline_def_async::parse(const picojson::value& def)
   if (! direct_expr_column_.empty()
       && (pk_columns().find(source_column_of(direct_expr_column_, ""))
 	  == pk_columns().end())) {
-    return string("column not exists in pk of destination:") + destination()
-      + '.' + direct_expr_column_;
+    return "column not exists in pk of destination:" + destination() + '.'
+      + direct_expr_column_;
   }
   return string();
 }

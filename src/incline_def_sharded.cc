@@ -11,7 +11,7 @@ incline_def_sharded::parse(const picojson::value& def)
   }
   // post init
   if (direct_expr_column_.empty()) {
-    return string("no shard_key defined for table:") + destination();
+    return "no shard_key defined for table:" + destination();
   }
   return string();
 }
