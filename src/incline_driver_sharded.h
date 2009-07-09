@@ -101,6 +101,9 @@ public:
     delete rule_;
   }
   virtual incline_def* create_def() const;
+  virtual forwarder_mgr* create_forwarder_mgr(tmd::conn_t* (*connect)(const char*, unsigned short), const std::string& src_host, unsigned short src_port, int poll_interval) {
+    return new forwarder_mgr(this, connect, src_host, src_port, poll_interval);
+  }
   std::string parse_sharded_def(const picojson::value& def);
   const rule* get_rule() const { return rule_; }
   std::string set_hostport(const std::string& hostport);

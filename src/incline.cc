@@ -58,6 +58,12 @@ inline incline_driver_sharded* sharded_driver()
   return static_cast<incline_driver_sharded*>(mgr->driver());
 }
 
+static tmd::conn_t* connect_db(const char* host, unsigned short port)
+{
+  return new tmd::conn_t(host, *opt_mysql_user, *opt_mysql_password,
+			 *opt_database, port);
+}
+
 int
 main(int argc, char** argv)
 {

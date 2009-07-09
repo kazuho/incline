@@ -59,6 +59,9 @@ public:
   std::vector<std::string> drop_table_all(bool if_exists) const;
   std::string create_table_of(const incline_def* def, bool if_not_exists, tmd::conn_t& dbh) const;
   std::string drop_table_of(const incline_def* def, bool if_exists) const;
+  virtual forwarder_mgr* create_forwarder_mgr(tmd::conn_t* (*connect)(const char*, unsigned short), const std::string& src_host, unsigned short src_port, int poll_interval) {
+    return new forwarder_mgr(this, connect, src_host, src_port, poll_interval);
+  }
 protected:
   std::string _create_table_of(const incline_def_async_qtable* def, const std::string& table_name, bool temporary, bool if_not_exists, tmd::conn_t& dbh) const;
   virtual std::vector<std::string> do_build_enqueue_sql(const incline_def* def, const std::map<std::string, std::string>& pk_columns, const std::vector<std::string>& tables, const std::vector<std::string>& cond) const;
