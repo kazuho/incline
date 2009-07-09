@@ -59,18 +59,6 @@ incline_driver_async_qtable::drop_table_of(const incline_def* _def,
     + def->queue_table();
 }
 
-
-incline_driver_async_qtable::forwarder*
-incline_driver_async_qtable::create_forwarder(incline_def* _def,
-					      tmd::conn_t* dbh,
-					      int poll_interval) const
-{
-  const incline_def_async_qtable* def
-    = dynamic_cast<const incline_def_async_qtable*>(_def);
-  assert(def != NULL);
-  return new forwarder(this, def, dbh, poll_interval);
-}
-
 string
 incline_driver_async_qtable::_create_table_of(const incline_def_async_qtable*
 					      def,
@@ -141,11 +129,6 @@ incline_driver_async_qtable::do_build_enqueue_sql(const incline_def* _def,
   return incline_util::vectorize(sql);
 }
 
-incline_driver_async_qtable::forwarder::~forwarder()
-{
-  delete dbh_;
-}
-
 incline_driver_async_qtable::forwarder::forwarder(const
 						  incline_driver_async_qtable*
 						  driver,
@@ -179,23 +162,29 @@ incline_driver_async_qtable::forwarder::forwarder(const
 	       driver->_create_table_of(def, temp_table_, true, false, *dbh_));
 }
 
+incline_driver_async_qtable::forwarder::~forwarder()
+{
+  delete dbh_;
+}
+
 void incline_driver_async_qtable::forwarder::_run()
 {
   while (1) {
     vector<string> pk_values;
     { // poll the queue table
+      string extra_cond = do_get_extra_cond();
       tmd::execute(*dbh_,
 		   string("INSERT INTO ") + temp_table_ + " SELECT * FROM "
-		   + queue_table_ + " LIMIT 1");
-      string extra_cond = do_get_extra_cond();
+		   + queue_table_
+		   + (extra_cond.empty()
+		      ? string()
+		      : string(" WHERE ") + extra_cond)
+		   + " LIMIT 1");
       tmd::query_t res(*dbh_,
 		       string("SELECT ") 
 		       + incline_util::join(',', dest_pk_columns_.begin(),
 					    dest_pk_columns_.end())
-		       + " FROM " + temp_table_
-		       + (extra_cond.empty()
-			  ? string()
-			  : string(" WHERE ") + extra_cond));
+		       + " FROM " + temp_table_);
       if (res.fetch().eof()) {
 	sleep(poll_interval_);
 	continue;
@@ -219,12 +208,14 @@ void incline_driver_async_qtable::forwarder::_run()
 					  src_tables_.end())
 		     + " WHERE "
 		     + incline_util::join(" AND ", scond.begin(), scond.end()));
+    bool success;
     if (! res.fetch().eof()) {
-      do_replace_row(res);
+      success = do_replace_row(res);
     } else {
-      do_delete_row(pk_values);
+      success = do_delete_row(pk_values);
     }
-    { // remove from queue
+    // remove from queue
+    if (success) {
       vector<string> dcond;
       for (vector<string>::const_iterator pi = dest_pk_columns_.begin();
 	   pi != dest_pk_columns_.end();
@@ -237,22 +228,24 @@ void incline_driver_async_qtable::forwarder::_run()
 		   + " WHERE EXISTS (SELECT * FROM " + temp_table_ + " WHERE "
 		   + incline_util::join(" AND ", dcond.begin(), dcond.end())
 		   + ')');
-      tmd::execute(*dbh_, string("DELETE FROM ") + temp_table_);
     }
+    tmd::execute(*dbh_, string("DELETE FROM ") + temp_table_);
   }
 }
 
-void
+bool
 incline_driver_async_qtable::forwarder::do_replace_row(tmd::query_t& res)
 {
   replace_row(*dbh_, res);
+  return true;
 }
 
-void
+bool
 incline_driver_async_qtable::forwarder::do_delete_row(const vector<string>&
 						      pk_values)
 {
   delete_row(*dbh_, pk_values);
+  return true;
 }
 
 string
@@ -271,7 +264,7 @@ incline_driver_async_qtable::forwarder::run(void* _fw)
 
 void
 incline_driver_async_qtable::forwarder::replace_row(tmd::conn_t& dbh,
-						    tmd::query_t& res)
+						    tmd::query_t& res) const
 {
   vector<string> values;
   for (size_t i = 0; i < src_columns_.size(); ++i) {
@@ -289,7 +282,7 @@ incline_driver_async_qtable::forwarder::replace_row(tmd::conn_t& dbh,
 void
 incline_driver_async_qtable::forwarder::delete_row(tmd::conn_t& dbh,
 						   const vector<string>&
-						   pk_values)
+						   pk_values) const
 {
   vector<string> dcond;
   for (size_t i = 0; i < dest_pk_columns_.size(); ++i) {

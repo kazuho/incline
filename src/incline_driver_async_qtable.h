@@ -26,19 +26,19 @@ public:
     std::vector<std::string> src_pk_columns_;
     std::vector<std::string> src_columns_;
   public:
+    forwarder(const incline_driver_async_qtable* driver, const incline_def_async_qtable* def, tmd::conn_t* dbh, int poll_interval);
     virtual ~forwarder();
   protected:
-    forwarder(const incline_driver_async_qtable* driver, const incline_def_async_qtable* def, tmd::conn_t* dbh, int poll_interval);
     void _run();
   protected:
-    virtual void do_replace_row(tmd::query_t& res);
-    virtual void do_delete_row(const std::vector<std::string>& pk_values);
+    virtual bool do_replace_row(tmd::query_t& res);
+    virtual bool do_delete_row(const std::vector<std::string>& pk_values);
     virtual std::string do_get_extra_cond();
   public:
     static void* run(void* fw);
   protected:
-    void replace_row(tmd::conn_t& dbh, tmd::query_t& res);
-    void delete_row(tmd::conn_t& dbh, const std::vector<std::string>& pk_values);
+    void replace_row(tmd::conn_t& dbh, tmd::query_t& res) const;
+    void delete_row(tmd::conn_t& dbh, const std::vector<std::string>& pk_values) const;
   };
   friend class forwarder;
 public:
@@ -47,7 +47,6 @@ public:
   std::vector<std::string> drop_table_all(bool if_exists) const;
   std::string create_table_of(const incline_def* def, bool if_not_exists, tmd::conn_t& dbh) const;
   std::string drop_table_of(const incline_def* def, bool if_exists) const;
-  forwarder* create_forwarder(incline_def* def, tmd::conn_t* dbh, int poll_interval) const;
 protected:
   std::string _create_table_of(const incline_def_async_qtable* def, const std::string& table_name, bool temporary, bool if_not_exists, tmd::conn_t& dbh) const;
   virtual std::vector<std::string> do_build_enqueue_sql(const incline_def* def, const std::map<std::string, std::string>& pk_columns, const std::vector<std::string>& tables, const std::vector<std::string>& cond) const;

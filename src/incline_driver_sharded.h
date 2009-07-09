@@ -1,18 +1,98 @@
 #ifndef incline_driver_sharded_h
 #define incline_driver_sharded_h
 
+#include "cac/cac_mutex.h"
 #include "incline_driver_async_qtable.h"
 
 class incline_driver_sharded : public incline_driver_async_qtable {
 public:
   typedef incline_driver_async_qtable super;
+  
   struct rule {
     virtual ~rule() {}
     virtual std::string parse(const picojson::value& def) = 0;
     virtual std::vector<std::string> get_all_hostport() const = 0;
     virtual std::string get_hostport_for(const std::string& key) const = 0;
-    virtual std::string build_direct_expr(const std::string& column_expr, const std::string& cur_hostport) = 0;
+    virtual std::string build_range_expr_for(const std::string& column_expr, const std::string& hostport) = 0;
   };
+  
+  class forwarder;
+  class forwarder_mgr;
+  
+  class fw_writer {
+  protected:
+    template <typename T> struct to_writer_data_t {
+      forwarder* forwarder_;
+      T* payload_;
+      int result_; // -1 if not ready, 0 if failed, 1 if true
+      to_writer_data_t(forwarder* f, T* p) : forwarder_(f), payload_(p), result_(-1) {}
+    };
+    struct to_writer_t {
+      pthread_cond_t from_writer_cond_;
+      std::vector<to_writer_data_t<tmd::query_t>*> replace_rows_;
+      std::vector<to_writer_data_t<const std::vector<std::string> >*> delete_rows_;
+      to_writer_t() {
+	pthread_cond_init(&from_writer_cond_, NULL);
+      }
+      ~to_writer_t() {
+	pthread_cond_destroy(&from_writer_cond_);
+      }
+    };
+    forwarder_mgr* mgr_;
+    std::string hostport_;
+    cac_mutex_t<to_writer_t*> to_writer_;
+    to_writer_t to_writer_base_[2];
+    pthread_cond_t to_writer_cond_;
+    time_t retry_at_;
+  public:
+    fw_writer(forwarder_mgr* mgr, const std::string& hostport);
+    ~fw_writer();
+    bool is_active() const;
+    bool replace_row(forwarder* forwarder, tmd::query_t& res);
+    bool delete_row(forwarder* forwarder, const std::vector<std::string>& pk_values);
+  protected:
+    void _run();
+    to_writer_t* _wait_and_swap();
+    bool _commit(tmd::conn_t& dbh, to_writer_t& to_writer);
+    void _set_result(to_writer_t& to_writer, bool result);
+  public:
+    static void* run(void* writer);
+  };
+
+  class forwarder : public incline_driver_async_qtable::forwarder {
+    friend class fw_writer;
+  public:
+    typedef incline_driver_async_qtable::forwarder super;
+  protected:
+    forwarder_mgr* mgr_;
+    size_t shard_index_in_replace_, shard_index_in_delete_;
+  public:
+    forwarder(forwarder_mgr* mgr, const incline_def_sharded* def, tmd::conn_t* dbh, int poll_interval);
+    virtual bool do_replace_row(tmd::query_t& res);
+    virtual bool do_delete_row(const std::vector<std::string>& pk_values);
+  };
+  
+  class forwarder_mgr {
+  protected:
+    const incline_driver_sharded* driver_;
+    std::map<std::string, fw_writer*> writers_;
+    tmd::conn_t* (*connect_)(const std::string& hostport);
+  public:
+    forwarder_mgr(incline_driver_sharded* driver, tmd::conn_t* (*connect)(const std::string&));
+    ~forwarder_mgr();
+    const incline_driver_sharded* get_driver() { return driver_; }
+    fw_writer* get_writer_for(const std::string& key) {
+      std::string hostport = driver_->get_rule()->get_hostport_for(key);
+      std::map<std::string, fw_writer*>::iterator wi = writers_.find(hostport);
+      assert(wi != writers_.end());
+      return wi->second;
+    }
+    tmd::conn_t* connect(const std::string& hostport) {
+      return (*connect_)(hostport);
+    }
+    forwarder* create_forwarder(incline_def* def, tmd::conn_t* dbh, int poll_interval);
+  };
+  
 protected:
   rule* rule_;
   std::string cur_hostport_;

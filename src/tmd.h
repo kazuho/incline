@@ -154,7 +154,8 @@ namespace tmd {
   {
     int ret = mysql_query(mysql, sql);
     if (ret != 0) {
-      throw error_t(ssprintf("mysql error:%d for sql: %s\n", ret, sql));
+      throw error_t(ssprintf("mysql error:%s for sql: %s\n", mysql_error(mysql),
+			     sql));
     }
   }
   

@@ -183,14 +183,13 @@ main(int argc, char** argv)
   } else if (command == "forward") {
     pthread_t* thr = new pthread_t [mgr->defs().size()];
     for (size_t i = 0; i < mgr->defs().size(); ++i) {
+      const incline_def_async_qtable* def
+	= static_cast<incline_def_async_qtable*>(mgr->defs()[i]);
+      tmd::conn_t* dbh
+	= new tmd::conn_t(*opt_mysql_host, *opt_mysql_user, *opt_mysql_password,
+			  *opt_database, *opt_mysql_port);
       incline_driver_async_qtable::forwarder* fw
-	= aq_driver()->create_forwarder(mgr->defs()[i],
-					new tmd::conn_t(*opt_mysql_host,
-							*opt_mysql_user,
-							*opt_mysql_password,
-							*opt_database,
-							*opt_mysql_port),
-					1);
+	= new incline_driver_async_qtable::forwarder(aq_driver(), def, dbh, 1);
       pthread_create(thr + i, NULL, incline_driver_async_qtable::forwarder::run,
 		     fw);
     }
