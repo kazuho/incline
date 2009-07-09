@@ -81,8 +81,8 @@ namespace incline_driver_sharded_ns {
 	= lb_hostport_.upper_bound(str_to_key_type<KEYTYPE>()(key));
       return i == lb_hostport_.begin() ? string() : (--i)->second;
     }
-    virtual string build_range_expr_for(const string& column_expr,
-					const string& hostport) const {
+    virtual string build_expr_for(const string& column_expr,
+				  const string& hostport) const {
       typename map<KEYTYPE, string>::const_iterator i;
       for (i = lb_hostport_.begin(); i != lb_hostport_.end(); ++i) {
 	if (i->second == hostport) {
@@ -150,7 +150,7 @@ incline_driver_sharded::set_hostport(const string& hostport)
 string
 incline_driver_sharded::do_build_direct_expr(const string& column_expr) const
 {
-  return rule_->build_range_expr_for(column_expr, cur_hostport_);
+  return rule_->build_expr_for(column_expr, cur_hostport_);
 }
 
 incline_driver_sharded::fw_writer::fw_writer(forwarder_mgr* mgr,
@@ -344,8 +344,7 @@ incline_driver_sharded::forwarder::do_get_extra_cond()
        ++wi) {
     if (! wi->second->is_active()) {
       cond.push_back(mgr()->driver()->rule()
-		     ->build_range_expr_for(def()->direct_expr_column(),
-					    wi->first));
+		     ->build_expr_for(def()->direct_expr_column(), wi->first));
     }
   }
   return incline_util::join(" AND ", cond.begin(), cond.end());

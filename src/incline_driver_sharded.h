@@ -13,7 +13,7 @@ public:
     virtual std::string parse(const picojson::value& def) = 0;
     virtual std::vector<std::string> get_all_hostport() const = 0;
     virtual std::string get_hostport_for(const std::string& key) const = 0;
-    virtual std::string build_range_expr_for(const std::string& column_expr, const std::string& hostport) const = 0;
+    virtual std::string build_expr_for(const std::string& column_expr, const std::string& hostport) const = 0;
   };
   
   class forwarder;
