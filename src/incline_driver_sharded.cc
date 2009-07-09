@@ -1,4 +1,5 @@
 #include <cassert>
+#include <set>
 #include "start_thread.h"
 #include "tmd.h"
 #include "incline_def_sharded.h"
@@ -67,13 +68,15 @@ namespace incline_driver_sharded_ns {
       return string();
     }
     virtual vector<string> get_all_hostport() const {
-      vector<string> r;
+      set<string> rs;
       for (typename map<KEYTYPE, string>::const_iterator i
 	     = lb_hostport_.begin();
 	   i != lb_hostport_.end();
 	   ++i) {
-	r.push_back(i->second);
+	rs.insert(i->second);
       }
+      vector<string> r;
+      copy(rs.begin(), rs.end(), back_inserter(r));
       return r;
     }
     virtual string get_hostport_for(const string& key) const {
@@ -84,20 +87,22 @@ namespace incline_driver_sharded_ns {
     virtual string build_expr_for(const string& column_expr,
 				  const string& hostport) const {
       typename map<KEYTYPE, string>::const_iterator i;
+      vector<string> cond;
       for (i = lb_hostport_.begin(); i != lb_hostport_.end(); ++i) {
 	if (i->second == hostport) {
-	  break;
+	  cond.push_back('(' + key_type_to_str<KEYTYPE>()(i->first) + "<="
+			 + column_expr);
+	  ++i;
+	  if (i != lb_hostport_.end()) {
+	    cond.back() += " AND " + column_expr + '<'
+	      + key_type_to_str<KEYTYPE>()(i->first);
+	  }
+	  cond.back() += ')';
+	  --i;
 	}
       }
-      assert(i != lb_hostport_.end());
-      string cond;
-      cond += key_type_to_str<KEYTYPE>()(i->first) + "<=" + column_expr;
-      ++i;
-      if (i != lb_hostport_.end()) {
-	cond += " AND " + column_expr + '<'
-	  + key_type_to_str<KEYTYPE>()(i->first);
-      }
-      return cond;
+      assert(! cond.empty()); // hostport not found
+      return '(' + incline_util::join(" OR ", cond.begin(), cond.end()) + ')';
     }
   };
   
@@ -122,7 +127,7 @@ incline_driver_sharded::parse_sharded_def(const picojson::value& def)
 #define RANGE_ALGO(id, type) \
   if (algo == "range-" id) rule_ = new range_rule<type>()
   RANGE_ALGO("int", long long);
-  RANGE_ALGO("string", string);
+  RANGE_ALGO("str-case-sensitive", string);
 #undef RANGE_ALGO
   if (rule_ == NULL) {
     return "unknown sharding algorithm: " + algo;
@@ -347,7 +352,7 @@ incline_driver_sharded::forwarder::do_get_extra_cond()
 		     ->build_expr_for(def()->direct_expr_column(), wi->first));
     }
   }
-  return incline_util::join(" AND ", cond.begin(), cond.end());
+  return "! (" + incline_util::join(" OR ", cond.begin(), cond.end()) + ')';
 }
 
 void*
