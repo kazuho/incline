@@ -4,6 +4,7 @@
 #include "incline_def_async_qtable.h"
 
 class incline_def_sharded : public incline_def_async_qtable {
+  typedef incline_def_async_qtable super;
 public:
   virtual std::string parse(const picojson::value& def);
 protected:

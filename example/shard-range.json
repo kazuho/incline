@@ -1,5 +1,5 @@
 {
-  "algorithm" : "range-uint32",
+  "algorithm" : "range-int",
   "map"       : {
     "0"    : "127.0.0.1:3306",
     "1000" : "127.0.0.1:33061",
