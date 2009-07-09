@@ -13,7 +13,7 @@ public:
     virtual std::string parse(const picojson::value& def) = 0;
     virtual std::vector<std::string> get_all_hostport() const = 0;
     virtual std::string get_hostport_for(const std::string& key) const = 0;
-    virtual std::string build_range_expr_for(const std::string& column_expr, const std::string& hostport) = 0;
+    virtual std::string build_range_expr_for(const std::string& column_expr, const std::string& hostport) const = 0;
   };
   
   class forwarder;
@@ -57,19 +57,6 @@ public:
     void _set_result(to_writer_t& to_writer, bool result);
   };
 
-  class forwarder : public incline_driver_async_qtable::forwarder {
-    friend class fw_writer;
-  public:
-    typedef incline_driver_async_qtable::forwarder super;
-  protected:
-    forwarder_mgr* mgr_;
-    size_t shard_index_in_replace_, shard_index_in_delete_;
-  public:
-    forwarder(forwarder_mgr* mgr, const incline_def_sharded* def, tmd::conn_t* dbh, int poll_interval);
-    virtual bool do_replace_row(tmd::query_t& res);
-    virtual bool do_delete_row(const std::vector<std::string>& pk_values);
-  };
-  
   class forwarder_mgr : public incline_driver_async_qtable::forwarder_mgr {
   public:
     typedef incline_driver_async_qtable::forwarder_mgr super;
@@ -78,11 +65,12 @@ public:
   public:
     forwarder_mgr(incline_driver_sharded* driver, tmd::conn_t* (*connect)(const char* host, unsigned short port), const std::string& src_host, unsigned short src_port, int poll_interval) : super(driver, connect, src_host, src_port, poll_interval) {}
     ~forwarder_mgr() {}
-    const incline_driver_sharded* get_driver() const {
-      return static_cast<const incline_driver_sharded*>(driver_);
+    const incline_driver_sharded* driver() const {
+      return static_cast<const incline_driver_sharded*>(super::driver());
     }
+    const std::map<std::string, fw_writer*> writers() { return writers_; }
     fw_writer* get_writer_for(const std::string& key) const {
-      std::string hostport = get_driver()->get_rule()->get_hostport_for(key);
+      std::string hostport = driver()->rule()->get_hostport_for(key);
       std::map<std::string, fw_writer*>::const_iterator wi
 	= writers_.find(hostport);
       assert(wi != writers_.end());
@@ -90,6 +78,26 @@ public:
     }
     virtual void* run();
     tmd::conn_t* connect(const std::string& hostport);
+  };
+  
+  class forwarder : public incline_driver_async_qtable::forwarder {
+    friend class fw_writer;
+  public:
+    typedef incline_driver_async_qtable::forwarder super;
+  protected:
+    size_t shard_index_in_replace_, shard_index_in_delete_;
+  public:
+    forwarder(forwarder_mgr* mgr, const incline_def_sharded* def, tmd::conn_t* dbh, int poll_interval);
+    const forwarder_mgr* mgr() const {
+      return static_cast<const forwarder_mgr*>(super::mgr());
+    }
+    forwarder_mgr* mgr() { return static_cast<forwarder_mgr*>(super::mgr()); }
+    const incline_def_sharded* def() const {
+      return static_cast<const incline_def_sharded*>(super::def());
+    }
+    virtual bool do_replace_row(tmd::query_t& res);
+    virtual bool do_delete_row(const std::vector<std::string>& pk_values);
+    virtual std::string do_get_extra_cond();
   };
   
 protected:
@@ -105,7 +113,7 @@ public:
     return new forwarder_mgr(this, connect, src_host, src_port, poll_interval);
   }
   std::string parse_sharded_def(const picojson::value& def);
-  const rule* get_rule() const { return rule_; }
+  const rule* rule() const { return rule_; }
   std::string set_hostport(const std::string& hostport);
 protected:
   virtual std::string do_build_direct_expr(const std::string& column_expr) const;

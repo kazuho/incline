@@ -130,14 +130,12 @@ incline_driver_async_qtable::do_build_enqueue_sql(const incline_def* _def,
   return incline_util::vectorize(sql);
 }
 
-incline_driver_async_qtable::forwarder::forwarder(const
-						  incline_driver_async_qtable*
-						  driver,
+incline_driver_async_qtable::forwarder::forwarder(forwarder_mgr* mgr,
 						  const
 						  incline_def_async_qtable* def,
 						  tmd::conn_t* dbh,
 						  int poll_interval)
-  : dbh_(dbh), dest_table_(def->destination()),
+  : mgr_(mgr), def_(def), dbh_(dbh), dest_table_(def->destination()),
     queue_table_(def->queue_table()),
     temp_table_("_qt_" + def->queue_table()),
     src_tables_(def->source()), merge_cond_(def->build_merge_cond("", "")),
@@ -160,7 +158,8 @@ incline_driver_async_qtable::forwarder::forwarder(const
   }
   // create temporary table
   tmd::execute(*dbh_,
-	       driver->_create_table_of(def, temp_table_, true, false, *dbh_));
+	       mgr_->driver()->_create_table_of(def, temp_table_, true, false,
+						*dbh_));
 }
 
 incline_driver_async_qtable::forwarder::~forwarder()
@@ -295,7 +294,7 @@ incline_driver_async_qtable::forwarder_mgr::run()
   vector<pthread_t> threads;
   
   { // create and start forwarders
-    const vector<incline_def*>& defs = driver_->get_mgr()->defs();
+    const vector<incline_def*>& defs = driver()->mgr()->defs();
     for (vector<incline_def*>::const_iterator di = defs.begin();
 	 di != defs.end();
 	 ++di) {
@@ -304,7 +303,7 @@ incline_driver_async_qtable::forwarder_mgr::run()
       assert(def != NULL);
       tmd::conn_t* dbh = (*connect_)(src_host_.c_str(), src_port_);
       assert(dbh != NULL);
-      threads.push_back(start_thread(new forwarder(driver_, def, dbh,
+      threads.push_back(start_thread(new forwarder(this, def, dbh,
 						   poll_interval_)));
     }
   }

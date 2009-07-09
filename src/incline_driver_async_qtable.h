@@ -12,9 +12,12 @@ namespace tmd {
 class incline_driver_async_qtable : public incline_driver_async {
 public:
   
+  class forwarder_mgr;
   class forwarder {
     friend class incline_driver_async_qtable;
   protected:
+    forwarder_mgr* mgr_;
+    const incline_def_async_qtable* def_;
     tmd::conn_t* dbh_;
     std::string dest_table_;
     std::string queue_table_;
@@ -27,8 +30,11 @@ public:
     std::vector<std::string> src_pk_columns_;
     std::vector<std::string> src_columns_;
   public:
-    forwarder(const incline_driver_async_qtable* driver, const incline_def_async_qtable* def, tmd::conn_t* dbh, int poll_interval);
+    forwarder(forwarder_mgr* mgr, const incline_def_async_qtable* def, tmd::conn_t* dbh, int poll_interval);
     virtual ~forwarder();
+    const forwarder_mgr* mgr() const { return mgr_; }
+    forwarder_mgr* mgr() { return mgr_; }
+    const incline_def_async_qtable* def() const { return def_; }
     void* run();
   protected:
     virtual bool do_replace_row(tmd::query_t& res);
@@ -49,10 +55,10 @@ public:
   public:
     forwarder_mgr(incline_driver_async_qtable* driver, tmd::conn_t* (*connect)(const char*, unsigned short), const std::string& src_host, unsigned short src_port, int poll_interval) : driver_(driver), connect_(connect), src_host_(src_host), src_port_(src_port), poll_interval_(poll_interval) {}
     virtual ~forwarder_mgr() {}
+    const incline_driver_async_qtable* driver() const { return driver_; }
     virtual void* run();
   };
   
-  friend class forwarder;
 public:
   virtual incline_def* create_def() const;
   std::vector<std::string> create_table_all(bool if_not_exists, tmd::conn_t& dbh) const;

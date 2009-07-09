@@ -82,7 +82,7 @@ namespace incline_driver_sharded_ns {
       return i == lb_hostport_.begin() ? string() : (--i)->second;
     }
     virtual string build_range_expr_for(const string& column_expr,
-					const string& hostport) {
+					const string& hostport) const {
       typename map<KEYTYPE, string>::const_iterator i;
       for (i = lb_hostport_.begin(); i != lb_hostport_.end(); ++i) {
 	if (i->second == hostport) {
@@ -298,8 +298,8 @@ incline_driver_sharded::forwarder::forwarder(forwarder_mgr* mgr,
 					     const incline_def_sharded* def,
 					     tmd::conn_t* dbh,
 					     int poll_interval)
-  : super(mgr->get_driver(), def, dbh, poll_interval), mgr_(mgr),
-    shard_index_in_replace_(UINT_MAX), shard_index_in_delete_(0)
+  : super(mgr, def, dbh, poll_interval), shard_index_in_replace_(UINT_MAX),
+    shard_index_in_delete_(0)
 {
   // setup shard_index_in_replace_
   for (size_t i = 0; i < dest_columns_.size(); ++i) {
@@ -323,7 +323,7 @@ incline_driver_sharded::forwarder::forwarder(forwarder_mgr* mgr,
 bool
 incline_driver_sharded::forwarder::do_replace_row(tmd::query_t& res)
 {
-  return mgr_->get_writer_for(res.field(shard_index_in_replace_))
+  return mgr()->get_writer_for(res.field(shard_index_in_replace_))
     ->replace_row(this, res);
 }
 
@@ -331,8 +331,24 @@ bool
 incline_driver_sharded::forwarder::do_delete_row(const vector<string>&
 						 pk_values)
 {
-  return mgr_->get_writer_for(pk_values[shard_index_in_delete_])
+  return mgr()->get_writer_for(pk_values[shard_index_in_delete_])
     ->delete_row(this, pk_values);
+}
+
+string
+incline_driver_sharded::forwarder::do_get_extra_cond()
+{
+  vector<string> cond;
+  for (map<string, fw_writer*>::const_iterator wi = mgr()->writers().begin();
+       wi != mgr()->writers().end();
+       ++wi) {
+    if (! wi->second->is_active()) {
+      cond.push_back(mgr()->driver()->rule()
+		     ->build_range_expr_for(def()->direct_expr_column(),
+					    wi->first));
+    }
+  }
+  return incline_util::join(" AND ", cond.begin(), cond.end());
 }
 
 void*
@@ -341,7 +357,7 @@ incline_driver_sharded::forwarder_mgr::run()
   vector<pthread_t> threads;
   
   { // create writers and start
-    vector<string> all_hostport(get_driver()->get_rule()->get_all_hostport());
+    vector<string> all_hostport(driver()->rule()->get_all_hostport());
     for (vector<string>::const_iterator hi = all_hostport.begin();
 	 hi != all_hostport.end();
 	 ++hi) {
