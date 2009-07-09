@@ -1,8 +1,4 @@
-extern "C" {
-#include <stdint.h>
-}
 #include <cassert>
-#include <sstream>
 #include "start_thread.h"
 #include "tmd.h"
 #include "incline_def_sharded.h"
@@ -15,11 +11,15 @@ using namespace std;
 namespace incline_driver_sharded_ns {
   
   template <typename KEYTYPE> struct str_to_key_type {
-    KEYTYPE operator()(const string& s) const {
-      stringstream ss(s);
-      KEYTYPE k;
-      ss >> k;
-      return k;
+    // operator() intentionally not defined to generate compile error
+  };
+  
+  template <> struct str_to_key_type<long long> {
+    long long operator()(const string& s) const {
+      long long v;
+      int r = sscanf(s.c_str(), "%lld", &v);
+      assert(r == 1);
+      return v;
     }
   };
   
@@ -30,10 +30,14 @@ namespace incline_driver_sharded_ns {
   };
   
   template <typename KEYTYPE> struct key_type_to_str {
-    string operator()(const KEYTYPE& k) const {
-      stringstream ss;
-      ss << k;
-      return ss.str();
+    // operator() intentionally not defined to generate compile error
+  };
+  
+  template <> struct key_type_to_str<long long> {
+    string operator()(const long long v) {
+      char buf[sizeof("-9223372036854775808")];
+      sprintf(buf, "%lld", v);
+      return buf;
     }
   };
   
@@ -117,10 +121,7 @@ incline_driver_sharded::parse_sharded_def(const picojson::value& def)
   string algo = def.get("algorithm").to_str();
 #define RANGE_ALGO(id, type) \
   if (algo == "range-" id) rule_ = new range_rule<type>()
-  RANGE_ALGO("int32", int32_t);
-  RANGE_ALGO("uint32", uint32_t);
-  RANGE_ALGO("int64", int64_t);
-  RANGE_ALGO("uint64", uint64_t);
+  RANGE_ALGO("int", long long);
   RANGE_ALGO("string", string);
 #undef RANGE_ALGO
   if (rule_ == NULL) {
