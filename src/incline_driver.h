@@ -18,6 +18,8 @@ protected:
 public:
   incline_driver() : mgr_(NULL) {}
   virtual ~incline_driver() {}
+  const incline_mgr* get_mgr() const { return mgr_; }
+  incline_mgr* get_mgr() { return mgr_; }
   virtual std::vector<std::string> insert_trigger_of(const std::string& src_table) const = 0;
   virtual std::vector<std::string> update_trigger_of(const std::string& src_table) const = 0;
   virtual std::vector<std::string> delete_trigger_of(const std::string& src_table) const = 0;

@@ -50,13 +50,11 @@ public:
     bool is_active() const;
     bool replace_row(forwarder* forwarder, tmd::query_t& res);
     bool delete_row(forwarder* forwarder, const std::vector<std::string>& pk_values);
+    void* run();
   protected:
-    void _run();
     to_writer_t* _wait_and_swap();
     bool _commit(tmd::conn_t& dbh, to_writer_t& to_writer);
     void _set_result(to_writer_t& to_writer, bool result);
-  public:
-    static void* run(void* writer);
   };
 
   class forwarder : public incline_driver_async_qtable::forwarder {
@@ -72,25 +70,26 @@ public:
     virtual bool do_delete_row(const std::vector<std::string>& pk_values);
   };
   
-  class forwarder_mgr {
-  protected:
-    const incline_driver_sharded* driver_;
-    std::map<std::string, fw_writer*> writers_;
-    tmd::conn_t* (*connect_)(const std::string& hostport);
+  class forwarder_mgr : public incline_driver_async_qtable::forwarder_mgr {
   public:
-    forwarder_mgr(incline_driver_sharded* driver, tmd::conn_t* (*connect)(const std::string&));
-    ~forwarder_mgr();
-    const incline_driver_sharded* get_driver() { return driver_; }
-    fw_writer* get_writer_for(const std::string& key) {
-      std::string hostport = driver_->get_rule()->get_hostport_for(key);
-      std::map<std::string, fw_writer*>::iterator wi = writers_.find(hostport);
+    typedef incline_driver_async_qtable::forwarder_mgr super;
+  protected:
+    std::map<std::string, fw_writer*> writers_;
+  public:
+    forwarder_mgr(incline_driver_sharded* driver, tmd::conn_t* (*connect)(const char* host, unsigned short port), const std::string& src_host, unsigned short src_port, int poll_interval) : super(driver, connect, src_host, src_port, poll_interval) {}
+    ~forwarder_mgr() {}
+    const incline_driver_sharded* get_driver() const {
+      return static_cast<const incline_driver_sharded*>(driver_);
+    }
+    fw_writer* get_writer_for(const std::string& key) const {
+      std::string hostport = get_driver()->get_rule()->get_hostport_for(key);
+      std::map<std::string, fw_writer*>::const_iterator wi
+	= writers_.find(hostport);
       assert(wi != writers_.end());
       return wi->second;
     }
-    tmd::conn_t* connect(const std::string& hostport) {
-      return (*connect_)(hostport);
-    }
-    forwarder* create_forwarder(incline_def* def, tmd::conn_t* dbh, int poll_interval);
+    virtual void* run();
+    tmd::conn_t* connect(const std::string& hostport);
   };
   
 protected:

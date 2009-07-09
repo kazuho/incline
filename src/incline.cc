@@ -3,6 +3,7 @@
 #include <iterator>
 #include <sstream>
 #include "getoptpp.h"
+#include "start_thread.h"
 #include "incline.h"
 
 using namespace std;
@@ -181,22 +182,11 @@ main(int argc, char** argv)
     vector<string> stmt(aq_driver()->drop_table_all(true));
     run_all_stmt(dbh, stmt);
   } else if (command == "forward") {
-    pthread_t* thr = new pthread_t [mgr->defs().size()];
-    for (size_t i = 0; i < mgr->defs().size(); ++i) {
-      const incline_def_async_qtable* def
-	= static_cast<incline_def_async_qtable*>(mgr->defs()[i]);
-      tmd::conn_t* dbh
-	= new tmd::conn_t(*opt_mysql_host, *opt_mysql_user, *opt_mysql_password,
-			  *opt_database, *opt_mysql_port);
-      incline_driver_async_qtable::forwarder* fw
-	= new incline_driver_async_qtable::forwarder(aq_driver(), def, dbh, 1);
-      pthread_create(thr + i, NULL, incline_driver_async_qtable::forwarder::run,
-		     fw);
-    }
-    for (size_t i = 0; i < mgr->defs().size(); ++i) {
-      pthread_join(thr[i], NULL);
-    }
-    delete thr;
+    incline_driver_async_qtable::forwarder_mgr* mgr
+      = aq_driver()->create_forwarder_mgr(connect_db, *opt_mysql_host,
+					  *opt_mysql_port, 1);
+    mgr->run();
+    delete mgr;
   } else {
     fprintf(stderr, "unknown command: %s\n", command.c_str());
     exit(1);

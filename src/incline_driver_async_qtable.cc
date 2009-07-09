@@ -1,3 +1,4 @@
+#include "start_thread.h"
 #include "tmd.h"
 #include "incline_def_async_qtable.h"
 #include "incline_driver_async_qtable.h"
@@ -167,7 +168,7 @@ incline_driver_async_qtable::forwarder::~forwarder()
   delete dbh_;
 }
 
-void incline_driver_async_qtable::forwarder::_run()
+void* incline_driver_async_qtable::forwarder::run()
 {
   while (1) {
     vector<string> pk_values;
@@ -231,6 +232,8 @@ void incline_driver_async_qtable::forwarder::_run()
     }
     tmd::execute(*dbh_, string("DELETE FROM ") + temp_table_);
   }
+  
+  return NULL;
 }
 
 bool
@@ -252,14 +255,6 @@ string
 incline_driver_async_qtable::forwarder::do_get_extra_cond()
 {
   return string();
-}
-
-void*
-incline_driver_async_qtable::forwarder::run(void* _fw)
-{
-  forwarder* fw = static_cast<forwarder*>(_fw);
-  fw->_run();
-  return NULL;
 }
 
 void
@@ -292,4 +287,33 @@ incline_driver_async_qtable::forwarder::delete_row(tmd::conn_t& dbh,
   tmd::execute(dbh,
 	       string("DELETE FROM ") + dest_table_ + " WHERE "
 	       + incline_util::join(" AND ", dcond.begin(), dcond.end()));
+}
+
+void*
+incline_driver_async_qtable::forwarder_mgr::run()
+{
+  vector<pthread_t> threads;
+  
+  { // create and start forwarders
+    const vector<incline_def*>& defs = driver_->get_mgr()->defs();
+    for (vector<incline_def*>::const_iterator di = defs.begin();
+	 di != defs.end();
+	 ++di) {
+      const incline_def_async_qtable* def
+	= dynamic_cast<const incline_def_async_qtable*>(*di);
+      assert(def != NULL);
+      tmd::conn_t* dbh = (*connect_)(src_host_.c_str(), src_port_);
+      assert(dbh != NULL);
+      threads.push_back(start_thread(new forwarder(driver_, def, dbh,
+						   poll_interval_)));
+    }
+  }
+  
+  // loop
+  while (! threads.empty()) {
+    pthread_join(threads.back(), NULL);
+    threads.pop_back();
+  }
+  
+  return NULL;
 }

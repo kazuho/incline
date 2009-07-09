@@ -3,9 +3,11 @@ extern "C" {
 }
 #include <cassert>
 #include <sstream>
+#include "start_thread.h"
 #include "tmd.h"
 #include "incline_def_sharded.h"
 #include "incline_driver_sharded.h"
+#include "incline_mgr.h"
 #include "incline_util.h"
 
 using namespace std;
@@ -199,8 +201,8 @@ incline_driver_sharded::fw_writer::delete_row(forwarder* forwarder,
   return info.result_ == 1;
 }
 
-void
-incline_driver_sharded::fw_writer::_run()
+void*
+incline_driver_sharded::fw_writer::run()
 {
   tmd::conn_t* dbh = NULL;
   
@@ -229,6 +231,8 @@ incline_driver_sharded::fw_writer::_run()
     to_writer->replace_rows_.clear();
     to_writer->delete_rows_.clear();
   }
+  
+  return NULL;
 }
 
 incline_driver_sharded::fw_writer::to_writer_t*
@@ -330,23 +334,40 @@ incline_driver_sharded::forwarder::do_delete_row(const vector<string>&
     ->delete_row(this, pk_values);
 }
 
-incline_driver_sharded::forwarder_mgr::forwarder_mgr(incline_driver_sharded* driver, tmd::conn_t* (*connect)(const std::string&))
-  : driver_(driver), connect_(connect)
+void*
+incline_driver_sharded::forwarder_mgr::run()
 {
+  vector<pthread_t> threads;
+  
+  { // create writers and start
+    vector<string> all_hostport(get_driver()->get_rule()->get_all_hostport());
+    for (vector<string>::const_iterator hi = all_hostport.begin();
+	 hi != all_hostport.end();
+	 ++hi) {
+      fw_writer* writer = new fw_writer(this, *hi);
+      threads.push_back(start_thread(writer));
+      writers_[*hi] = writer;
+    }
+  }
+
+  // supre
+  super::run();
+  
+  // loop
+  while (! threads.empty()) {
+    pthread_join(threads.back(), NULL);
+    threads.pop_back();
+  }
+  
+  return NULL;
 }
 
-incline_driver_sharded::forwarder_mgr::~forwarder_mgr()
+tmd::conn_t*
+incline_driver_sharded::forwarder_mgr::connect(const string& hostport)
 {
-  // TODO
-}
-
-incline_driver_sharded::forwarder*
-incline_driver_sharded::forwarder_mgr::create_forwarder(incline_def* _def,
-							tmd::conn_t* dbh,
-							int poll_interval)
-{
-  const incline_def_sharded* def
-    = dynamic_cast<const incline_def_sharded*>(_def);
-  assert(def != NULL);
-  return new forwarder(this, def, dbh, poll_interval);
+  unsigned short port = 0;
+  string::size_type colon_at = hostport.find(':');
+  assert(colon_at != string::npos);
+  sscanf(hostport.c_str() + colon_at + 1, "%hu", &port);
+  return (*connect_)(hostport.substr(0, colon_at).c_str(), port);
 }
