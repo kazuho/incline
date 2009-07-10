@@ -344,17 +344,22 @@ incline_driver_sharded::forwarder::do_get_extra_cond()
 {
   vector<string> cond;
   const map<string, fw_writer*>& writers(mgr()->writers());
+  bool has_inactive = false;
   for (map<string, fw_writer*>::const_iterator wi = writers.begin();
        wi != writers.end();
        ++wi) {
-    if (! wi->second->is_active()) {
+    if (wi->second->is_active()) {
       cond.push_back(mgr()->driver()->rule()
 		     ->build_expr_for(def()->direct_expr_column(), wi->first));
+    } else {
+      has_inactive = true;
     }
   }
-  return cond.empty()
-    ? string()
-    : "! (" + incline_util::join(" OR ", cond.begin(), cond.end()) + ')';
+  return has_inactive
+    ? (cond.empty()
+       ? string("0")
+       : incline_util::join(" OR ", cond.begin(), cond.end()))
+    : string();
 }
 
 void*

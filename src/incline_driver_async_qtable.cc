@@ -180,15 +180,18 @@ void* incline_driver_async_qtable::forwarder::run()
 		      ? string()
 		      : string(" WHERE ") + extra_cond)
 		   + " LIMIT 1");
+      if (tmd::affected_rows(*dbh_) == 0) {
+	sleep(poll_interval_);
+	continue;
+      }
+    }
+    { // fetch the pks
       tmd::query_t res(*dbh_,
 		       "SELECT "
 		       + incline_util::join(',', dest_pk_columns_.begin(),
 					    dest_pk_columns_.end())
 		       + " FROM " + temp_table_);
-      if (res.fetch().eof()) {
-	sleep(poll_interval_);
-	continue;
-      }
+      assert(! res.fetch().eof());
       for (size_t i = 0; i < dest_pk_columns_.size(); ++i) {
 	pk_values.push_back(res.field(i));
       }

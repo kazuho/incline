@@ -181,6 +181,11 @@ namespace tmd {
     va_end(args);
   }
   
+  inline unsigned long long affected_rows(MYSQL* mysql)
+  {
+    return mysql_affected_rows(mysql);
+  }
+  
   class query_t {
   protected:
     MYSQL_RES* res_;
