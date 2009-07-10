@@ -75,14 +75,11 @@ incline_driver_async::_build_delete_from_def(const incline_def* _def,
 			      "   ");
       r.push_back("END IF");
     } else {
-      std::string direct_expr = do_build_direct_expr(de_col);
-      vector<string> cond_and_dexpr(cond);
-      cond_and_dexpr.push_back(direct_expr);
       incline_util::push_back(r,
 			      super::_build_delete_from_def(def, src_table,
-							    cond_and_dexpr));
-      cond_and_dexpr.pop_back();
-      cond_and_dexpr.push_back("! (" +  direct_expr + ")");
+							    cond));
+      vector<string> cond_and_dexpr(cond);
+      cond_and_dexpr.push_back("! (" + do_build_direct_expr(de_col) + ')');
       incline_util::push_back(r,
 			      _build_enqueue_sql(def, src_table, "OLD",
 						 cond_and_dexpr));
