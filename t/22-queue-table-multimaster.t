@@ -105,4 +105,4 @@ sleep 1;
 ok(system(@incline_cmd, 'drop-trigger') == 0, 'drop queue if exists');
 ok(system(@incline_cmd, 'drop-queue') == 0, 'drop queue');
 ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")
-    for qw/incline_cal incline_cal_member incline_cal_by_user/;
+    for qw/incline_tweet incline_follow incline_timeline/;
