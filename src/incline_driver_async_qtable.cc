@@ -226,6 +226,8 @@ void* incline_driver_async_qtable::forwarder::run()
 	dcond.push_back(queue_table_ + '.' + *pi + '=' + temp_table_ + '.'
 			+ *pi);
       }
+      dcond.push_back(queue_table_ + "._iq_version=" + temp_table_
+		      + "._iq_version");
       tmd::execute(*dbh_,
 		   "DELETE FROM " + queue_table_
 		   + " WHERE EXISTS (SELECT * FROM " + temp_table_ + " WHERE "
