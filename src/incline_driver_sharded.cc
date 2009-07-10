@@ -117,7 +117,7 @@ incline_driver_sharded::create_def() const
 }
 
 string
-incline_driver_sharded::parse_sharded_def(const picojson::value& def)
+incline_driver_sharded::parse_shard_def(const picojson::value& def)
 {
   if (! def.is<picojson::object>()) {
     return "definition should be ant object";
@@ -216,7 +216,7 @@ incline_driver_sharded::fw_writer::run()
     // fetch request
     to_writer_t* to_writer = _wait_and_swap();
     // connect to db if necessary
-    if (dbh == NULL && retry_at_ != 0 && retry_at_ <= time(NULL)) {
+    if (dbh == NULL && (retry_at_ == 0 || retry_at_ <= time(NULL))) {
       dbh = mgr_->connect(hostport_);
       retry_at_ = 0;
     }
@@ -259,7 +259,7 @@ incline_driver_sharded::fw_writer::_commit(tmd::conn_t& dbh,
 					   to_writer_t& to_writer)
 {
   try {
-    tmd::execute(dbh, "BEGIN TRANSACTION");
+    tmd::execute(dbh, "BEGIN");
     for (vector<to_writer_data_t<tmd::query_t>*>::iterator ri
 	   = to_writer.replace_rows_.begin();
 	 ri != to_writer.replace_rows_.end();
@@ -271,7 +271,6 @@ incline_driver_sharded::fw_writer::_commit(tmd::conn_t& dbh,
 	 di != to_writer.delete_rows_.end();
 	 ++di) {
       (*di)->forwarder_->delete_row(dbh, *(*di)->payload_);
-      (*di)->result_ = 1;
     }
     tmd::execute(dbh, "COMMIT");
     return true;
@@ -344,15 +343,18 @@ string
 incline_driver_sharded::forwarder::do_get_extra_cond()
 {
   vector<string> cond;
-  for (map<string, fw_writer*>::const_iterator wi = mgr()->writers().begin();
-       wi != mgr()->writers().end();
+  const map<string, fw_writer*>& writers(mgr()->writers());
+  for (map<string, fw_writer*>::const_iterator wi = writers.begin();
+       wi != writers.end();
        ++wi) {
     if (! wi->second->is_active()) {
       cond.push_back(mgr()->driver()->rule()
 		     ->build_expr_for(def()->direct_expr_column(), wi->first));
     }
   }
-  return "! (" + incline_util::join(" OR ", cond.begin(), cond.end()) + ')';
+  return cond.empty()
+    ? string()
+    : "! (" + incline_util::join(" OR ", cond.begin(), cond.end()) + ')';
 }
 
 void*
@@ -391,4 +393,15 @@ incline_driver_sharded::forwarder_mgr::connect(const string& hostport)
   assert(colon_at != string::npos);
   sscanf(hostport.c_str() + colon_at + 1, "%hu", &port);
   return (*connect_)(hostport.substr(0, colon_at).c_str(), port);
+}
+
+incline_driver_sharded::forwarder*
+incline_driver_sharded::forwarder_mgr::do_create_forwarder(const incline_def_async_qtable* _def)
+{
+  const incline_def_sharded* def
+    = dynamic_cast<const incline_def_sharded*>(_def);
+  assert(def != NULL);
+  tmd::conn_t* dbh = (*connect_)(src_host_.c_str(), src_port_);
+  assert(dbh != NULL);
+  return new forwarder(this, def, dbh, poll_interval_);
 }

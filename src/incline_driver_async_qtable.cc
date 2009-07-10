@@ -301,10 +301,7 @@ incline_driver_async_qtable::forwarder_mgr::run()
       const incline_def_async_qtable* def
 	= dynamic_cast<const incline_def_async_qtable*>(*di);
       assert(def != NULL);
-      tmd::conn_t* dbh = (*connect_)(src_host_.c_str(), src_port_);
-      assert(dbh != NULL);
-      threads.push_back(start_thread(new forwarder(this, def, dbh,
-						   poll_interval_)));
+      threads.push_back(start_thread(do_create_forwarder(def)));
     }
   }
   
@@ -315,4 +312,12 @@ incline_driver_async_qtable::forwarder_mgr::run()
   }
   
   return NULL;
+}
+
+incline_driver_async_qtable::forwarder*
+incline_driver_async_qtable::forwarder_mgr::do_create_forwarder(const incline_def_async_qtable* def)
+{
+  tmd::conn_t* dbh = (*connect_)(src_host_.c_str(), src_port_);
+  assert(dbh != NULL);
+  return new forwarder(this, def, dbh, poll_interval_);
 }

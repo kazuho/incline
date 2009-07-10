@@ -57,6 +57,8 @@ public:
     virtual ~forwarder_mgr() {}
     const incline_driver_async_qtable* driver() const { return driver_; }
     virtual void* run();
+  protected:
+    virtual forwarder* do_create_forwarder(const incline_def_async_qtable* def);
   };
   
 public:
