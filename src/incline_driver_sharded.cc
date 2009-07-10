@@ -35,7 +35,7 @@ namespace incline_driver_sharded_ns {
   };
   
   template <> struct key_type_to_str<long long> {
-    string operator()(const long long v) {
+    string operator()(long long v) {
       char buf[sizeof("-9223372036854775808")];
       sprintf(buf, "%lld", v);
       return buf;
@@ -106,6 +106,58 @@ namespace incline_driver_sharded_ns {
     }
   };
   
+  class hash_int_rule : public incline_driver_sharded::rule {
+  protected:
+    vector<string> hostport_; // hostport_[key % hostport_.size()]
+  public:
+    virtual string parse(const picojson::value& def) {
+      if (! def.get("num").is<double>()) {
+	return "``num'' field does not exist in hash partitioning rule";
+      }
+      const picojson::value& nodes = def.get("nodes");
+      if (! nodes.is<picojson::array>()) {
+	return "``nodes'' array not defined in hash partition rule";
+      }
+      for (picojson::array::const_iterator ni
+	     = nodes.get<picojson::array>().begin();
+	   ni != nodes.get<picojson::array>().end();
+	   ++ni) {
+	hostport_.push_back(ni->to_str());
+      }
+      if (def.get("num").get<double>() != hostport_.size()) {
+	return "number of nodes does not match the value specified in ``num'' field";
+      }
+      return string();
+    }
+    virtual vector<string> get_all_hostport() const {
+      set<string> rs;
+      for (vector<string>::const_iterator hi = hostport_.begin();
+	   hi != hostport_.end();
+	   ++hi) {
+	rs.insert(*hi);
+      }
+      vector<string> r;
+      copy(rs.begin(), rs.end(), back_inserter(r));
+      return r;
+    }
+    virtual string get_hostport_for(const string& key) const {
+      return hostport_[str_to_key_type<long long>()(key) % hostport_.size()];
+    }
+    virtual string build_expr_for(const string& column_expr,
+				  const string& hostport) const {
+      vector<string> cond;
+      for (unsigned i = 0; i < hostport_.size(); ++i) {
+	if (hostport_[i] == hostport) {
+	  char modulo_str[sizeof("%-9223372036854775808=-2147483648)")];
+	  sprintf(modulo_str, "%%%lld=%u)", (long long)hostport_.size(), i);
+	  cond.push_back('(' + column_expr + modulo_str);
+	}
+      }
+      assert(! cond.empty()); // hostport not found
+      return '(' + incline_util::join(" OR ", cond.begin(), cond.end()) + ')';
+    }
+  };
+  
 }
 
 using namespace incline_driver_sharded_ns;
@@ -129,6 +181,7 @@ incline_driver_sharded::parse_shard_def(const picojson::value& def)
   RANGE_ALGO("int", long long);
   RANGE_ALGO("str-case-sensitive", string);
 #undef RANGE_ALGO
+  if (algo == "hash-int") rule_ = new hash_int_rule();
   if (rule_ == NULL) {
     return "unknown sharding algorithm: " + algo;
   }
