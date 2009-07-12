@@ -56,6 +56,13 @@ public:
     while (1) {
       {
 	typename cac_mutex_t<info_t>::lockref info(info_);
+	for (typename slot_t::iterator i = handle_slot->begin();
+	     i != handle_slot->end();
+	     ++i) {
+	  (*i)->ready_ = true;
+	  pthread_cond_signal(&(*i)->ret_cond_);
+	}
+	handle_slot->clear();
 	while (info->active_slot_->empty()) {
 	  if (info->terminate_) {
 	    goto EXIT;
@@ -65,16 +72,6 @@ public:
 	std::swap(handle_slot, info->active_slot_);
       }
       do_handle_calls(*handle_slot);
-      {
-	typename cac_mutex_t<info_t>::lockref info(info_);
-	for (typename slot_t::iterator i = handle_slot->begin();
-	     i != handle_slot->end();
-	     ++i) {
-	  (*i)->ready_ = true;
-	  pthread_cond_signal(&(*i)->ret_cond_);
-	}
-      }
-      handle_slot->clear();
     }
   EXIT:
     delete handle_slot;
