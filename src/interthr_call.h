@@ -1,3 +1,30 @@
+/* Copyright 2009 Cybozu Labs, Inc. All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY CYBOZU LABS, INC. ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+ * EVENT SHALL CYBOZU LABS, INC. OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * 
+ * The views and conclusions contained in the software and documentation are
+ * those of the authors and should not be interpreted as representing official
+ * policies, either expressed or implied, of Cybozu Labs, Inc.
+ */
+
 #ifndef interthr_call_h
 #define interthr_call_h
 
@@ -90,4 +117,52 @@ protected:
   virtual void do_handle_calls(slot_t& slot) = 0;
 };
 
+#ifdef TEST_INTERTHR_CALL
+
+#include <iostream>
+#include "start_thread.h"
+
+struct request {
+  int arg_;
+  int ret_;
+  request(int arg) : arg_(arg), ret_(0) {}
+};
+
+class handler : public interthr_call_t<request> {
+protected:
+  virtual void do_handle_calls(slot_t& slot) {
+    for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
+      request* req((*si)->request());
+      std::cout << "handler(" << req->arg_ << ") called" << std::endl;
+      req->ret_ = req->arg_;
+    }
+  }
+};
+
+int main(void)
+{
+  // create handler and run two threads
+  handler hdr;
+  std::vector<pthread_t> hdr_thrs;
+  hdr_thrs.push_back(start_thread(&hdr));
+  hdr_thrs.push_back(start_thread(&hdr));
+  
+  // call handler (actually call them from multiple threads)
+  for (int i = 0; i < 10; i++) {
+    request r(i);
+    hdr.call(r);
+    assert(r.ret_ == i);
+  }
+  
+  // terminate handler threads
+  hdr.terminate();
+  while (! hdr_thrs.empty()) {
+    pthread_join(hdr_thrs.back(), NULL);
+    hdr_thrs.pop_back();
+  }
+  
+  return 0;
+}
+
+#endif
 #endif
