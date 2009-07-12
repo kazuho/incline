@@ -5,6 +5,7 @@ extern "C" {
 #include <pthread.h>
 }
 #include <algorithm>
+#include <cassert>
 #include <vector>
 #include "cac/cac_mutex.h"
 
