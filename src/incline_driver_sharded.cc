@@ -211,143 +211,51 @@ incline_driver_sharded::do_build_direct_expr(const string& column_expr) const
   return rule_->build_expr_for(column_expr, cur_hostport_);
 }
 
-incline_driver_sharded::fw_writer::fw_writer(forwarder_mgr* mgr,
-					     const string& hostport)
-  : mgr_(mgr), hostport_(hostport), to_writer_(NULL), retry_at_(0)
-{
-  *to_writer_.unsafe_ref() = to_writer_base_;
-  pthread_cond_init(&to_writer_cond_, NULL);
-}
-
 incline_driver_sharded::fw_writer::~fw_writer()
 {
-  pthread_cond_destroy(&to_writer_cond_);
-}
-
-bool
-incline_driver_sharded::fw_writer::is_active() const
-{
-  return retry_at_ == 0 || retry_at_ <= time(NULL);
-}
-
-bool
-incline_driver_sharded::fw_writer::replace_row(forwarder* forwarder,
-					       tmd::query_t& res)
-{
-  to_writer_data_t<tmd::query_t> info(forwarder, &res);
-  cac_mutex_t<to_writer_t*>::lockref to_writer(to_writer_);
-  (*to_writer)->replace_rows_.push_back(&info);
-  pthread_cond_signal(&to_writer_cond_);
-  pthread_cond_t* wait_cond = &(*to_writer)->from_writer_cond_;
-  while (info.result_ == -1) {
-    pthread_cond_wait(wait_cond, to_writer_.mutex());
-  }
-  return info.result_ == 1;
-}
-
-bool
-incline_driver_sharded::fw_writer::delete_row(forwarder* forwarder,
-					      const vector<string>& pk_values)
-{
-  to_writer_data_t<const vector<string> > info(forwarder, &pk_values);
-  cac_mutex_t<to_writer_t*>::lockref to_writer(to_writer_);
-  (*to_writer)->delete_rows_.push_back(&info);
-  pthread_cond_signal(&to_writer_cond_);
-  pthread_cond_t* wait_cond = &(*to_writer)->from_writer_cond_;
-  while (info.result_ == -1) {
-    pthread_cond_wait(wait_cond, to_writer_.mutex());
-  }
-  return info.result_ == 1;
-}
-
-void*
-incline_driver_sharded::fw_writer::run()
-{
-  tmd::conn_t* dbh = NULL;
-  
-  while (1) {
-    // fetch request
-    to_writer_t* to_writer = _wait_and_swap();
-    // connect to db if necessary
-    if (dbh == NULL && (retry_at_ == 0 || retry_at_ <= time(NULL))) {
-      dbh = mgr_->connect(hostport_);
-      retry_at_ = 0;
-    }
-    // if connected, try commiting data
-    if (dbh != NULL && _commit(*dbh, *to_writer)) {
-      _set_result(*to_writer, true);
-    } else {
-      _set_result(*to_writer, false);
-      if (dbh != NULL) {
-	delete dbh;
-	dbh = NULL;
-      }
-      retry_at_ = time(NULL) + 10;
-    }
-    // notify forwarders
-    pthread_cond_broadcast(&to_writer->from_writer_cond_);
-    // clear to_writer
-    to_writer->replace_rows_.clear();
-    to_writer->delete_rows_.clear();
-  }
-  
-  return NULL;
-}
-
-incline_driver_sharded::fw_writer::to_writer_t*
-incline_driver_sharded::fw_writer::_wait_and_swap()
-{
-  cac_mutex_t<to_writer_t*>::lockref to_writer(to_writer_);
-  while ((*to_writer)->replace_rows_.empty()
-	 && (*to_writer)->delete_rows_.empty()) {
-    pthread_cond_wait(&to_writer_cond_, to_writer_.mutex());
-  }
-  to_writer_t* r = *to_writer;
-  *to_writer = to_writer_base_ + (r == to_writer_base_);
-  return r;
-}
-
-bool
-incline_driver_sharded::fw_writer::_commit(tmd::conn_t& dbh,
-					   to_writer_t& to_writer)
-{
-  try {
-    tmd::execute(dbh, "BEGIN");
-    for (vector<to_writer_data_t<tmd::query_t>*>::iterator ri
-	   = to_writer.replace_rows_.begin();
-	 ri != to_writer.replace_rows_.end();
-	 ++ri) {
-      (*ri)->forwarder_->replace_row(dbh, *(*ri)->payload_);
-    }
-    for (vector<to_writer_data_t<const vector<string> >*>::iterator di
-	   = to_writer.delete_rows_.begin();
-	 di != to_writer.delete_rows_.end();
-	 ++di) {
-      (*di)->forwarder_->delete_row(dbh, *(*di)->payload_);
-    }
-    tmd::execute(dbh, "COMMIT");
-    return true;
-  } catch (tmd::error_t err) {
-    cerr << err.what() << endl;
-    return false;
-  }
+  delete dbh_;
 }
 
 void
-incline_driver_sharded::fw_writer::_set_result(to_writer_t& to_writer,
-					       bool result)
+incline_driver_sharded::fw_writer::do_handle_calls(slot_t& slot)
 {
-  for (vector<to_writer_data_t<tmd::query_t>*>::iterator ri
-	 = to_writer.replace_rows_.begin();
-       ri != to_writer.replace_rows_.end();
-       ++ri) {
-    (*ri)->result_ = result;
+  // connect to db if necessary
+  if (dbh_ == NULL && (retry_at_ == 0 || retry_at_ <= time(NULL))) {
+    dbh_ = mgr_->connect(hostport_);
+    retry_at_ = 0;
   }
-  for (vector<to_writer_data_t<const vector<string> >*>::iterator di
-	 = to_writer.delete_rows_.begin();
-       di != to_writer.delete_rows_.end();
-       ++di) {
-    (*di)->result_ = result;
+  if (dbh_ == NULL) {
+    // no need to set the return value, it's initialized to false
+    return;
+  }
+  // commit data
+  try {
+    tmd::execute(*dbh_, "BEGIN");
+    for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
+      fw_writer_call_t* req = (*si)->request();
+      switch (req->action_) {
+      case fw_writer_call_t::e_replace_row:
+	req->forwarder_->replace_row(*dbh_, *req->replace_row_);
+	break;
+      case fw_writer_call_t::e_delete_row:
+	req->forwarder_->delete_row(*dbh_, *req->delete_row_);
+	break;
+      default:
+	assert(0);
+	break;
+      }
+    }
+    tmd::execute(*dbh_, "COMMIT");
+    for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
+      fw_writer_call_t* req = (*si)->request();
+      req->success_ = true;
+    }
+  } catch (tmd::error_t err) {
+    // on error, log error, disconnect
+    cerr << err.what() << endl;
+    delete dbh_;
+    dbh_ = NULL;
+    retry_at_ = time(NULL) + 10;
   }
 }
 

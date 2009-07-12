@@ -1,7 +1,7 @@
 #ifndef incline_driver_sharded_h
 #define incline_driver_sharded_h
 
-#include "cac/cac_mutex.h"
+#include "interthr_call.h"
 #include "incline_driver_async_qtable.h"
 
 class incline_driver_sharded : public incline_driver_async_qtable {
@@ -19,42 +19,45 @@ public:
   class forwarder;
   class forwarder_mgr;
   
-  class fw_writer {
+  struct fw_writer_call_t {
+    enum {
+      e_replace_row,
+      e_delete_row,
+    } action_;
+    bool success_;
+    forwarder* forwarder_;
+    union {
+      tmd::query_t* replace_row_;
+      const std::vector<std::string>* delete_row_;
+    };
+    fw_writer_call_t(forwarder* f, tmd::query_t* r) : action_(e_replace_row), success_(false), forwarder_(f) { replace_row_ = r; }
+    fw_writer_call_t(forwarder* f, const std::vector<std::string>* d) : action_(e_delete_row), success_(false), forwarder_(f) { delete_row_ = d; }
+  };
+  
+  class fw_writer : public interthr_call_t<fw_writer_call_t> {
   protected:
-    template <typename T> struct to_writer_data_t {
-      forwarder* forwarder_;
-      T* payload_;
-      int result_; // -1 if not ready, 0 if failed, 1 if true
-      to_writer_data_t(forwarder* f, T* p) : forwarder_(f), payload_(p), result_(-1) {}
-    };
-    struct to_writer_t {
-      pthread_cond_t from_writer_cond_;
-      std::vector<to_writer_data_t<tmd::query_t>*> replace_rows_;
-      std::vector<to_writer_data_t<const std::vector<std::string> >*> delete_rows_;
-      to_writer_t() {
-	pthread_cond_init(&from_writer_cond_, NULL);
-      }
-      ~to_writer_t() {
-	pthread_cond_destroy(&from_writer_cond_);
-      }
-    };
     forwarder_mgr* mgr_;
     std::string hostport_;
-    cac_mutex_t<to_writer_t*> to_writer_;
-    to_writer_t to_writer_base_[2];
-    pthread_cond_t to_writer_cond_;
+    tmd::conn_t* dbh_;
     time_t retry_at_;
   public:
-    fw_writer(forwarder_mgr* mgr, const std::string& hostport);
-    ~fw_writer();
-    bool is_active() const;
-    bool replace_row(forwarder* forwarder, tmd::query_t& res);
-    bool delete_row(forwarder* forwarder, const std::vector<std::string>& pk_values);
-    void* run();
+    fw_writer(forwarder_mgr* mgr, const std::string& hostport) : mgr_(mgr), hostport_(hostport), dbh_(NULL), retry_at_(0) {}
+    virtual ~fw_writer();
+    bool is_active() const {
+      return retry_at_ == 0 || retry_at_ <= time(NULL);
+    }
+    bool replace_row(forwarder* forwarder, tmd::query_t& res) {
+      fw_writer_call_t c(forwarder, &res);
+      call(c);
+      return c.success_;
+    }
+    bool delete_row(forwarder* forwarder, const std::vector<std::string>& pk_values) {
+      fw_writer_call_t c(forwarder, &pk_values);
+      call(c);
+      return c.success_;
+    }
   protected:
-    to_writer_t* _wait_and_swap();
-    bool _commit(tmd::conn_t& dbh, to_writer_t& to_writer);
-    void _set_result(to_writer_t& to_writer, bool result);
+    void do_handle_calls(slot_t& slot);
   };
 
   class forwarder : public incline_driver_async_qtable::forwarder {
