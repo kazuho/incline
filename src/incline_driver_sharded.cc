@@ -211,52 +211,60 @@ incline_driver_sharded::do_build_direct_expr(const string& column_expr) const
   return rule_->build_expr_for(column_expr, cur_hostport_);
 }
 
-incline_driver_sharded::fw_writer::~fw_writer()
+void*
+incline_driver_sharded::fw_writer::do_handle_calls(int)
 {
-  delete dbh_;
-}
-
-void
-incline_driver_sharded::fw_writer::do_handle_calls(slot_t& slot)
-{
-  // connect to db if necessary
-  if (dbh_ == NULL && (retry_at_ == 0 || retry_at_ <= time(NULL))) {
-    dbh_ = mgr_->connect(hostport_);
-    retry_at_ = 0;
-  }
-  if (dbh_ == NULL) {
-    // no need to set the return value, it's initialized to false
-    return;
-  }
-  // commit data
-  try {
-    tmd::execute(*dbh_, "BEGIN");
-    for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
-      fw_writer_call_t* req = (*si)->request();
-      switch (req->action_) {
-      case fw_writer_call_t::e_replace_row:
-	req->forwarder_->replace_row(*dbh_, *req->replace_row_);
-	break;
-      case fw_writer_call_t::e_delete_row:
-	req->forwarder_->delete_row(*dbh_, *req->delete_row_);
-	break;
-      default:
-	assert(0);
-	break;
+  tmd::conn_t* dbh = NULL;
+  
+  while (! terminate_requested()) {
+    // get data to handle
+    slot_t& slot = get_slot();
+    if (slot.empty()) {
+      continue;
+    }
+    // connect to db if necessary
+    if (dbh == NULL && (retry_at_ == 0 || retry_at_ <= time(NULL))) {
+      dbh = mgr_->connect(hostport_);
+      retry_at_ = 0;
+    }
+    if (dbh == NULL) {
+      // not connected, return immediately
+      continue;
+    }
+    // commit data
+    try {
+      tmd::execute(*dbh, "BEGIN");
+      for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
+	fw_writer_call_t* req = (*si)->request();
+	switch (req->action_) {
+	case fw_writer_call_t::e_replace_row:
+	  req->forwarder_->replace_row(*dbh, *req->replace_row_);
+	  break;
+	case fw_writer_call_t::e_delete_row:
+	  req->forwarder_->delete_row(*dbh, *req->delete_row_);
+	  break;
+	default:
+	  assert(0);
+	  break;
+	}
       }
+      tmd::execute(*dbh, "COMMIT");
+      for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
+	fw_writer_call_t* req = (*si)->request();
+	req->success_ = true;
+      }
+      retry_at_ = 0; // reset so that other threads will reconnect immediately
+    } catch (tmd::error_t err) {
+      // on error, log error, disconnect
+      cerr << err.what() << endl;
+      delete dbh;
+      dbh = NULL;
+      retry_at_ = time(NULL) + 10;
     }
-    tmd::execute(*dbh_, "COMMIT");
-    for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
-      fw_writer_call_t* req = (*si)->request();
-      req->success_ = true;
-    }
-  } catch (tmd::error_t err) {
-    // on error, log error, disconnect
-    cerr << err.what() << endl;
-    delete dbh_;
-    dbh_ = NULL;
-    retry_at_ = time(NULL) + 10;
   }
+  
+  delete dbh;
+  return NULL;
 }
 
 incline_driver_sharded::forwarder::forwarder(forwarder_mgr* mgr,
@@ -334,7 +342,7 @@ incline_driver_sharded::forwarder_mgr::run()
 	 hi != all_hostport.end();
 	 ++hi) {
       fw_writer* writer = new fw_writer(this, *hi);
-      threads.push_back(start_thread(writer));
+      threads.push_back(start_thread(writer, 0));
       writers_[*hi] = writer;
     }
   }

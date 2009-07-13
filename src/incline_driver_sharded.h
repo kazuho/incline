@@ -34,15 +34,13 @@ public:
     fw_writer_call_t(forwarder* f, const std::vector<std::string>* d) : action_(e_delete_row), success_(false), forwarder_(f) { delete_row_ = d; }
   };
   
-  class fw_writer : public interthr_call_t<fw_writer_call_t> {
+  class fw_writer : public interthr_call_t<fw_writer, fw_writer_call_t> {
   protected:
     forwarder_mgr* mgr_;
     std::string hostport_;
-    tmd::conn_t* dbh_;
     time_t retry_at_;
   public:
-    fw_writer(forwarder_mgr* mgr, const std::string& hostport) : mgr_(mgr), hostport_(hostport), dbh_(NULL), retry_at_(0) {}
-    virtual ~fw_writer();
+    fw_writer(forwarder_mgr* mgr, const std::string& hostport) : mgr_(mgr), hostport_(hostport), retry_at_(0) {}
     bool is_active() const {
       return retry_at_ == 0 || retry_at_ <= time(NULL);
     }
@@ -56,8 +54,7 @@ public:
       call(c);
       return c.success_;
     }
-  protected:
-    void do_handle_calls(slot_t& slot);
+    void* do_handle_calls(int);
   };
 
   class forwarder : public incline_driver_async_qtable::forwarder {

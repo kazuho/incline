@@ -36,10 +36,11 @@ extern "C" {
 #include <vector>
 #include "cac/cac_mutex.h"
 
-template <typename Request> struct interthr_call_t {
+template <typename Handler, typename Request>
+struct interthr_call_t {
 public:
   class call_info_t {
-    friend class interthr_call_t<Request>;
+    friend class interthr_call_t<Handler, Request>;
   protected:
     Request* req_;
     pthread_cond_t ret_cond_;
@@ -68,41 +69,30 @@ protected:
     }
   };
   cac_mutex_t<info_t> info_;
+  pthread_key_t handle_slot_key_;
 public:
-  interthr_call_t() : info_(NULL) {}
-  virtual ~interthr_call_t() {
+  interthr_call_t() : info_(NULL) {
+    pthread_key_create(&handle_slot_key_, NULL);
+  }
+  ~interthr_call_t() {
     assert(info_.unsafe_ref()->active_slot_->empty());
+    pthread_key_delete(handle_slot_key_);
+  }
+  bool terminate_requested() const {
+    typename cac_mutex_t<info_t>::const_lockref info(info_);
+    return info->terminate_;
   }
   void terminate() {
     typename cac_mutex_t<info_t>::lockref info(info_);
     info->terminate_ = true;
     pthread_cond_broadcast(&info->to_worker_cond_);
   }
-  void* run() {
+  template <typename Arg> void* run(Arg& arg) {
     slot_t* handle_slot = new slot_t();
-    while (1) {
-      {
-	typename cac_mutex_t<info_t>::lockref info(info_);
-	for (typename slot_t::iterator i = handle_slot->begin();
-	     i != handle_slot->end();
-	     ++i) {
-	  (*i)->ready_ = true;
-	  pthread_cond_signal(&(*i)->ret_cond_);
-	}
-	handle_slot->clear();
-	while (info->active_slot_->empty()) {
-	  if (info->terminate_) {
-	    goto EXIT;
-	  }
-	  pthread_cond_wait(&info->to_worker_cond_, info_.mutex());
-	}
-	std::swap(handle_slot, info->active_slot_);
-      }
-      do_handle_calls(*handle_slot);
-    }
-  EXIT:
+    pthread_setspecific(handle_slot_key_, &handle_slot);
+    void *ret = static_cast<Handler*>(this)->do_handle_calls(arg);
     delete handle_slot;
-    return NULL;
+    return ret;
   }
   void call(Request& req) {
     call_info_t ci(&req);
@@ -114,7 +104,26 @@ public:
     }
   }
 protected:
-  virtual void do_handle_calls(slot_t& slot) = 0;
+  slot_t& get_slot() {
+    slot_t*& handle_slot =
+      *reinterpret_cast<slot_t**>(pthread_getspecific(handle_slot_key_));
+    typename cac_mutex_t<info_t>::lockref info(info_);
+    for (typename slot_t::iterator i = handle_slot->begin();
+	 i != handle_slot->end();
+	 ++i) {
+      (*i)->ready_ = true;
+      pthread_cond_signal(&(*i)->ret_cond_);
+    }
+    handle_slot->clear();
+    while (info->active_slot_->empty()) {
+      if (info->terminate_) {
+	return *handle_slot;
+      }
+      pthread_cond_wait(&info->to_worker_cond_, info_.mutex());
+    }
+    std::swap(handle_slot, info->active_slot_);
+    return *handle_slot;
+  }
 };
 
 #ifdef TEST_INTERTHR_CALL
@@ -128,14 +137,18 @@ struct request {
   request(int arg) : arg_(arg), ret_(0) {}
 };
 
-class handler : public interthr_call_t<request> {
-protected:
-  virtual void do_handle_calls(slot_t& slot) {
-    for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
-      request* req((*si)->request());
-      std::cout << "handler(" << req->arg_ << ") called" << std::endl;
-      req->ret_ = req->arg_;
+struct handler : public interthr_call_t<handler, request> {
+  void* do_handle_calls(int thr_id) {
+    while (! terminate_requested()) {
+      slot_t& slot = get_slot();
+      for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
+	request* req((*si)->request());
+	std::cout << "handler(" << req->arg_ << ") called, thr_id:" << thr_id
+		  << std::endl;
+	req->ret_ = req->arg_;
+      }
     }
+    return NULL;
   }
 };
 
@@ -144,8 +157,8 @@ int main(void)
   // create handler and run two threads
   handler hdr;
   std::vector<pthread_t> hdr_thrs;
-  hdr_thrs.push_back(start_thread(&hdr));
-  hdr_thrs.push_back(start_thread(&hdr));
+  hdr_thrs.push_back(start_thread(&hdr, 1));
+  hdr_thrs.push_back(start_thread(&hdr, 2));
   
   // call handler (actually call them from multiple threads)
   for (int i = 0; i < 10; i++) {

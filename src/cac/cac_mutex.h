@@ -48,6 +48,24 @@ public:
     lockref(const lockref&);
     lockref& operator=(const lockref&);
   };
+  
+  class const_lockref {
+  protected:
+    const cac_mutex_t<T>* m_;
+  public:
+  const_lockref(const cac_mutex_t<T>& m) : m_(&m) {
+      pthread_mutex_lock(&const_cast<cac_mutex_t<T>*>(m_)->mutex_);
+    }
+    ~const_lockref() {
+      pthread_mutex_unlock(&const_cast<cac_mutex_t<T>*>(m_)->mutex_);
+    }
+    operator const T*() { return &m_->t_; }
+    const T& operator*() { return *operator const T*(); }
+    const T* operator->() { return operator const T*(); }
+  private:
+    const_lockref(const const_lockref&);
+    const_lockref& operator=(const const_lockref&);
+  };
 
 protected:
   friend class cac_mutex_t<T>::lockref;
