@@ -95,7 +95,7 @@ main(int argc, char** argv)
       cerr << "unknown mode:" << *opt_mode << endl;
       exit(1);
     }
-    mgr = new incline_mgr(driver);
+    mgr = new incline_mgr(driver, *opt_database);
   }
   
   { // parse source

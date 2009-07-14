@@ -7,8 +7,8 @@
 
 using namespace std;
 
-incline_mgr::incline_mgr(incline_driver* d)
-  : db_name_("test"), defs_(), driver_(d), trigger_time_("AFTER")
+incline_mgr::incline_mgr(incline_driver* d, const std::string& db_name)
+  : db_name_(db_name), defs_(), driver_(d), trigger_time_("AFTER")
 {
   driver_->mgr_ = this;
 }
