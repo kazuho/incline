@@ -95,7 +95,7 @@ incline_driver_async_qtable::_create_table_of(const incline_def_async_qtable*
     + incline_util::join(',', col_defs.begin(), col_defs.end())
     + ",_iq_version INT UNSIGNED NOT NULL DEFAULT 0,PRIMARY KEY("
     + incline_util::join(',', pk_cols.begin(), pk_cols.end())
-    + ")) ENGINE=InnoDB";
+    + ")) ENGINE=" + (temporary ? "MEMORY" : "InnoDB");
 }
 
 vector<string>
