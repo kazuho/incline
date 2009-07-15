@@ -271,32 +271,26 @@ incline_driver_sharded::forwarder::forwarder(forwarder_mgr* mgr,
 					     const incline_def_sharded* def,
 					     tmd::conn_t* dbh,
 					     int poll_interval)
-  : super(mgr, def, dbh, poll_interval), shard_index_in_replace_(UINT_MAX),
-    shard_index_in_delete_(0)
+  : super(mgr, def, dbh, poll_interval)
 {
-  // setup shard_index_in_replace_
-  for (size_t i = 0; i < dest_columns_.size(); ++i) {
-    if (dest_columns_[i] == def->direct_expr_column()) {
-      shard_index_in_replace_ = i;
-      break;
-    }
-  }
-  assert(shard_index_in_replace_ != UINT_MAX);
-  // setup shard_index_in_delete_
+  size_t i = 0;
   for (map<string, string>::const_iterator pi = def->pk_columns().begin();
        pi != def->pk_columns().end();
-       ++pi, ++shard_index_in_delete_) {
+       ++pi, ++i) {
     if (pi->second == def->direct_expr_column()) {
-      break;
+      shard_col_index_ = i;
+      goto FOUND;
     }
   }
-  assert(shard_index_in_delete_ != def->pk_columns().size());
+  assert(0);
+ FOUND:
+  ;
 }
 
 bool
 incline_driver_sharded::forwarder::do_replace_row(tmd::query_t& res)
 {
-  return mgr()->get_writer_for(res.field(shard_index_in_replace_))
+  return mgr()->get_writer_for(res.field(shard_col_index_))
     ->replace_row(this, res);
 }
 
@@ -304,7 +298,7 @@ bool
 incline_driver_sharded::forwarder::do_delete_row(const vector<string>&
 						 pk_values)
 {
-  return mgr()->get_writer_for(pk_values[shard_index_in_delete_])
+  return mgr()->get_writer_for(pk_values[shard_col_index_])
     ->delete_row(this, pk_values);
 }
 

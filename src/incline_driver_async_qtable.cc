@@ -135,31 +135,61 @@ incline_driver_async_qtable::forwarder::forwarder(forwarder_mgr* mgr,
 						  incline_def_async_qtable* def,
 						  tmd::conn_t* dbh,
 						  int poll_interval)
-  : mgr_(mgr), def_(def), dbh_(dbh), dest_table_(def->destination()),
-    queue_table_(def->queue_table()),
-    temp_table_("_qt_" + def->queue_table()),
-    src_tables_(def->source()), merge_cond_(def->build_merge_cond("", "")),
-    poll_interval_(poll_interval)
+  : mgr_(mgr), def_(def), dbh_(dbh), poll_interval_(poll_interval)
 {
+  vector<string> dest_cols, src_cols,
+    fetch_src_cond(def->build_merge_cond("", "")), del_queue_cond;
+  string temp_table = "_qt_" + def->queue_table();
   // build column names
   for (map<string, string>::const_iterator pi = def->pk_columns().begin();
        pi != def->pk_columns().end();
        ++pi) {
     dest_pk_columns_.push_back(pi->second);
-    dest_columns_.push_back(pi->second);
-    src_pk_columns_.push_back(pi->first);
-    src_columns_.push_back(pi->first);
+    dest_cols.push_back(pi->second);
+    src_cols.push_back(pi->first);
+    fetch_src_cond.push_back(pi->first + '=' + temp_table + '.' + pi->second);
+    del_queue_cond.push_back(def->queue_table() + '.' + pi->second + '='
+			     + temp_table + '.' + pi->second);
+    
   }
   for (map<string, string>::const_iterator ni = def->npk_columns().begin();
        ni != def->npk_columns().end();
        ++ni) {
-    dest_columns_.push_back(ni->second);
-    src_columns_.push_back(ni->first);
+    dest_cols.push_back(ni->second);
+    src_cols.push_back(ni->first);
   }
   // create temporary table
   tmd::execute(*dbh_,
-	       mgr_->driver()->_create_table_of(def, temp_table_, true, false,
+	       mgr_->driver()->_create_table_of(def, temp_table, true, false,
 						*dbh_));
+  // build read queries
+  copy_to_temp_query_base_ =
+    "INSERT INTO " + temp_table + " SELECT * FROM " + def->queue_table();
+  fetch_pk_query_ =
+    "SELECT "
+    + incline_util::join(',', dest_pk_columns_.begin(), dest_pk_columns_.end())
+    + " FROM " + temp_table;
+  fetch_src_query_ =
+    "SELECT "
+    + incline_util::join(',', src_cols.begin(), src_cols.end())
+    + " FROM " + temp_table + " INNER JOIN "
+    + incline_util::join(" INNER JOIN ", def->source().begin(),
+			 def->source().end())
+    + " WHERE "
+    + incline_util::join(" AND ", fetch_src_cond.begin(), fetch_src_cond.end());
+  delete_queue_query_ =
+    "DELETE FROM " + def->queue_table() + " WHERE EXISTS (SELECT * FROM "
+    + temp_table + " WHERE "
+    + incline_util::join(" AND ", del_queue_cond.begin(), del_queue_cond.end())
+    + " AND " + def->queue_table() + "._iq_version=" + temp_table
+    + "._iq_version)";
+  delete_temp_query_ = "DELETE FROM " + temp_table;
+  // build write queries
+  replace_row_query_base_ =
+    "REPLACE INTO " + def->destination() + " ("
+    + incline_util::join(',', dest_cols.begin(), dest_cols.end())
+    + ") VALUES ";
+  delete_row_query_base_ = "DELETE FROM " + def->destination() + " WHERE ";
 }
 
 incline_driver_async_qtable::forwarder::~forwarder()
@@ -173,44 +203,26 @@ void* incline_driver_async_qtable::forwarder::run()
     vector<string> pk_values;
     { // poll the queue table
       string extra_cond = do_get_extra_cond();
-      tmd::execute(*dbh_,
-		   "INSERT INTO " + temp_table_ + " SELECT * FROM "
-		   + queue_table_
-		   + (extra_cond.empty()
-		      ? string()
-		      : string(" WHERE ") + extra_cond)
-		   + " LIMIT 1");
+      string query = copy_to_temp_query_base_;
+      if (! extra_cond.empty()) {
+	query += " WHERE " + extra_cond;
+      }
+      query += " LIMIT 1";
+      tmd::execute(*dbh_, query);
       if (tmd::affected_rows(*dbh_) == 0) {
 	sleep(poll_interval_);
 	continue;
       }
     }
     { // fetch the pks
-      tmd::query_t res(*dbh_,
-		       "SELECT "
-		       + incline_util::join(',', dest_pk_columns_.begin(),
-					    dest_pk_columns_.end())
-		       + " FROM " + temp_table_);
+      tmd::query_t res(*dbh_, fetch_pk_query_);
       assert(! res.fetch().eof());
-      for (size_t i = 0; i < dest_pk_columns_.size(); ++i) {
+      for (size_t i = 0; i < res.num_fields(); ++i) {
 	pk_values.push_back(res.field(i));
       }
     }
     // we have a row in queue, handle it
-    vector<string> scond(merge_cond_);
-    for (size_t i = 0; i < src_pk_columns_.size(); ++i) {
-      scond.push_back(src_pk_columns_[i] + "='"
-		      + tmd::escape(*dbh_, pk_values[i]) + '\'');
-    }
-    tmd::query_t res(*dbh_,
-		     "SELECT "
-		     + incline_util::join(',', src_columns_.begin(),
-					  src_columns_.end())
-		     + " FROM "
-		     + incline_util::join(" INNER JOIN ", src_tables_.begin(), 
-					  src_tables_.end())
-		     + " WHERE "
-		     + incline_util::join(" AND ", scond.begin(), scond.end()));
+    tmd::query_t res(*dbh_, fetch_src_query_);
     bool success;
     if (! res.fetch().eof()) {
       success = do_replace_row(res);
@@ -219,22 +231,9 @@ void* incline_driver_async_qtable::forwarder::run()
     }
     // remove from queue
     if (success) {
-      vector<string> dcond;
-      for (vector<string>::const_iterator pi = dest_pk_columns_.begin();
-	   pi != dest_pk_columns_.end();
-	   ++pi) {
-	dcond.push_back(queue_table_ + '.' + *pi + '=' + temp_table_ + '.'
-			+ *pi);
-      }
-      dcond.push_back(queue_table_ + "._iq_version=" + temp_table_
-		      + "._iq_version");
-      tmd::execute(*dbh_,
-		   "DELETE FROM " + queue_table_
-		   + " WHERE EXISTS (SELECT * FROM " + temp_table_ + " WHERE "
-		   + incline_util::join(" AND ", dcond.begin(), dcond.end())
-		   + ')');
+      tmd::execute(*dbh_, delete_queue_query_);
     }
-    tmd::execute(*dbh_, "DELETE FROM " + temp_table_);
+    tmd::execute(*dbh_, delete_temp_query_);
   }
   
   return NULL;
@@ -266,14 +265,11 @@ incline_driver_async_qtable::forwarder::replace_row(tmd::conn_t& dbh,
 						    tmd::query_t& res) const
 {
   vector<string> values;
-  for (size_t i = 0; i < src_columns_.size(); ++i) {
+  for (size_t i = 0; i < res.num_fields(); ++i) {
     values.push_back("'" + tmd::escape(dbh, res.field(i)) + '\'');
   }
-  tmd::execute(dbh,
-	       "REPLACE INTO " + dest_table_ + " ("
-	       + incline_util::join(',', dest_columns_.begin(),
-				    dest_columns_.end())
-	       + ") VALUES ("
+  tmd::execute(dbh, 
+	       replace_row_query_base_ + '('
 	       + incline_util::join(',', values.begin(), values.end())
 	       + ')');
 }
@@ -289,7 +285,7 @@ incline_driver_async_qtable::forwarder::delete_row(tmd::conn_t& dbh,
 		    + tmd::escape(dbh, pk_values[i]) + '\'');
   }
   tmd::execute(dbh,
-	       "DELETE FROM " + dest_table_ + " WHERE "
+	       delete_row_query_base_
 	       + incline_util::join(" AND ", dcond.begin(), dcond.end()));
 }
 

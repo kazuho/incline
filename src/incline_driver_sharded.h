@@ -62,7 +62,7 @@ public:
   public:
     typedef incline_driver_async_qtable::forwarder super;
   protected:
-    size_t shard_index_in_replace_, shard_index_in_delete_;
+    size_t shard_col_index_; // used for replace and delete, they are the same
   public:
     forwarder(forwarder_mgr* mgr, const incline_def_sharded* def, tmd::conn_t* dbh, int poll_interval);
     const forwarder_mgr* mgr() const {

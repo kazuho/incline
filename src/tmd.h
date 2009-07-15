@@ -191,11 +191,14 @@ namespace tmd {
     MYSQL_RES* res_;
     MYSQL_ROW row_;
     unsigned long* lengths_;
+    unsigned int num_fields_;
   public:
-    query_t(MYSQL* mysql, const std::string& sql) : row_(NULL), lengths_(NULL) {
+    query_t(MYSQL* mysql, const std::string& sql)
+      : row_(NULL), lengths_(NULL), num_fields_(0) {
       execute(mysql, sql);
       res_ = mysql_store_result(mysql);
       assert(res_ != NULL);
+      num_fields_ = mysql_num_fields(res_);
     }
     query_t(MYSQL* mysql, const char* fmt, ...)
       __attribute__((__format__(__printf__, 3, 4)))
@@ -206,6 +209,7 @@ namespace tmd {
       va_end(args);
       res_ = mysql_store_result(mysql);
       assert(res_ != NULL);
+      num_fields_ = mysql_num_fields(res_);
     }
     ~query_t() { mysql_free_result(res_); }
     query_t& fetch() {
@@ -213,9 +217,10 @@ namespace tmd {
       lengths_ = mysql_fetch_lengths(res_);
       return *this;
     }
+    unsigned int num_fields() const { return num_fields_; }
     bool eof() const { return row_ == NULL; }
-    const char* field(size_t idx) { return row_[idx]; }
-    unsigned long field_length(size_t idx) { return lengths_[idx]; }
+    const char* field(size_t idx) const { return row_[idx]; }
+    unsigned long field_length(size_t idx) const { return lengths_[idx]; }
   private:
     query_t(const query_t&);
     query_t& operator=(const query_t&);
