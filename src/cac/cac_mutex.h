@@ -53,7 +53,7 @@ public:
   protected:
     const cac_mutex_t<T>* m_;
   public:
-  const_lockref(const cac_mutex_t<T>& m) : m_(&m) {
+    const_lockref(const cac_mutex_t<T>& m) : m_(&m) {
       pthread_mutex_lock(&const_cast<cac_mutex_t<T>*>(m_)->mutex_);
     }
     ~const_lockref() {
@@ -84,6 +84,72 @@ public:
 private:
   cac_mutex_t(const cac_mutex_t&);
   cac_mutex_t& operator=(const cac_mutex_t&);
+};
+
+// not tested
+template <typename T> class cac_sep_mutex_t {
+public:
+  
+  class mutex_t {
+  protected:
+    pthread_mutex_t mutex_;
+  public:
+    mutex_t(pthread_mutexattr_t* attr) {
+      pthread_mutex_init(&mutex_, attr);
+    }
+    ~mutex_t() {
+      pthread_mutex_destroy(&mutex_);
+    }
+    pthread_mutex_t* mutex() { return &mutex_; }
+  };
+  
+  class lockref {
+  protected:
+    T* t_;
+    pthread_mutex_t* mutex_;
+  public:
+    lockref(cac_mutex_t<T>& m, mutex_t* mutex) : t_(&m.t_), mutex_(mutex.mutex()) {
+      pthread_mutex_lock(mutex_);
+    }
+    ~lockref() {
+      pthread_mutex_unlock(mutex_);
+    }
+    operator T*() { return t_; }
+    T& operator*() { return *operator T*(); }
+    T* operator->() { return operator T*(); }
+  private:
+    lockref(const lockref&);
+    lockref& operator=(const lockref&);
+  };
+
+  class const_lockref {
+  protected:
+    T* t_;
+    pthread_mutex_t* mutex_;
+  public:
+    const_lockref(cac_mutex_t<T>& m, mutex_t* mutex) : t_(&m.t_), mutex_(mutex.mutex()) {
+      pthread_mutex_lock(mutex_);
+    }
+    ~const_lockref() {
+      pthread_mutex_unlock(mutex_);
+    }
+    operator const T*() { return t_; }
+    const T& operator*() { return *operator const T*(); }
+    const T* operator->() { return operator const T*(); }
+  private:
+    const_lockref(const const_lockref&);
+    const_lockref& operator=(const const_lockref&);
+  };
+  
+protected:
+  friend class cac_sep_mutex_t<T>::lockref;
+  T t_;
+public:
+  const T* unsafe_ref() const { return &t_; }
+  T* unsafe_ref() { return &t_; }
+private:
+  cac_sep_mutex_t(const cac_sep_mutex_t&);
+  cac_sep_mutex_t operator=(const cac_sep_mutex_t&);
 };
 
 #endif

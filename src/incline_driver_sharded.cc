@@ -285,35 +285,22 @@ incline_driver_sharded::forwarder::forwarder(forwarder_mgr* mgr,
 bool
 incline_driver_sharded::forwarder::do_update_rows(const vector<vector<string> >& replace_rows, const vector<vector<string> >& delete_rows)
 {
-  map<fw_writer*,
-    pair<vector<const vector<string>*>, vector<const vector<string>*> >
-    > writer_rows;
-  
-  for (vector<vector<string> >::const_iterator ri = replace_rows.begin();
-       ri != replace_rows.end();
-       ++ri) {
-    writer_rows[mgr()->get_writer_for((*ri)[shard_col_index_])]
-      .first.push_back(&*ri);
-  }
-  for (vector<vector<string> >::const_iterator ri = delete_rows.begin();
-       ri != delete_rows.end();
-       ++ri) {
-    writer_rows[mgr()->get_writer_for((*ri)[shard_col_index_])]
-      .second.push_back(&*ri);
-  }
-  
-  for (map<fw_writer*,
-	 pair<vector<const vector<string>*>, vector<const vector<string>*> >
-	 >::const_iterator wi = writer_rows.begin();
-       wi != writer_rows.end();
-       ++wi) {
-    fw_writer_call_t call(this, &wi->second.first, &wi->second.second);
-    wi->first->call(call);
-    if (! call.success_) {
-      return false;
+  map<fw_writer*, fw_writer_call_t*> calls;
+  _setup_calls(calls, replace_rows, &fw_writer_call_t::replace_rows_);
+  _setup_calls(calls, delete_rows, &fw_writer_call_t::delete_rows_);
+  fw_writer::call(calls);
+  bool r = true;
+  for (map<fw_writer*, fw_writer_call_t*>::iterator ci = calls.begin();
+       ci != calls.end();
+       ++ci) {
+    if (! ci->second->success_) {
+      r = false;
     }
+    delete ci->second->replace_rows_;
+    delete ci->second->delete_rows_;
+    delete ci->second;
   }
-  return true;
+  return r;
 }
 
 string
@@ -335,6 +322,26 @@ incline_driver_sharded::forwarder::do_get_extra_cond()
   return has_inactive
     ? (cond.empty() ? string("0") : incline_util::join(" OR ", cond))
     : string();
+}
+
+void
+incline_driver_sharded::forwarder::_setup_calls(map<fw_writer*, fw_writer_call_t*>& calls, const vector<vector<string> >& rows, vector<const vector<string>*>* fw_writer_call_t::*target_rows)
+{
+  for (vector<vector<string> >::const_iterator ri = rows.begin();
+       ri != rows.end();
+       ++ri) {
+    fw_writer* writer = mgr()->get_writer_for((*ri)[shard_col_index_]);
+    map<fw_writer*, fw_writer_call_t*>::iterator ci = calls.lower_bound(writer);
+    if (ci != calls.end() && ci->first == writer) {
+      (ci->second->*target_rows)->push_back(&*ri);
+    } else {
+      fw_writer_call_t* call
+	= new fw_writer_call_t(this, new vector<const vector<string>*>(),
+			       new vector<const vector<string>*>());
+      (call->*target_rows)->push_back(&*ri);
+      calls.insert(ci, make_pair(writer, call));
+    }
+  }
 }
 
 void*

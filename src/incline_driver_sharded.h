@@ -21,10 +21,10 @@ public:
   
   struct fw_writer_call_t {
     forwarder* forwarder_;
-    const std::vector<const std::vector<std::string>*>* replace_rows_,
+    std::vector<const std::vector<std::string>*>* replace_rows_,
       * delete_rows_;
     bool success_;
-    fw_writer_call_t(forwarder* f, const std::vector<const std::vector<std::string>*>* replace_rows, const std::vector<const std::vector<std::string>*>* delete_rows) : forwarder_(f), replace_rows_(replace_rows), delete_rows_(delete_rows), success_(false) {}
+    fw_writer_call_t(forwarder* f, std::vector<const std::vector<std::string>*>* replace_rows, std::vector<const std::vector<std::string>*>* delete_rows) : forwarder_(f), replace_rows_(replace_rows), delete_rows_(delete_rows), success_(false) {}
   };
   
   class fw_writer : public interthr_call_t<fw_writer, fw_writer_call_t> {
@@ -56,8 +56,9 @@ public:
       return static_cast<const incline_def_sharded*>(super::def());
     }
     virtual bool do_update_rows(const std::vector<std::vector<std::string> >& update_rows, const std::vector<std::vector<std::string> >& delete_rows);
-    void map_rows_to_writers(std::map<fw_writer*, std::vector<const std::vector<std::string>*> >& writer_rows, const std::vector<std::vector<std::string> >& rows);
     virtual std::string do_get_extra_cond();
+  protected:
+    void _setup_calls(std::map<fw_writer*, fw_writer_call_t*>& calls, const std::vector<std::vector<std::string> >& rows, std::vector<const std::vector<std::string>*>* fw_writer_call_t::*target_rows);
   };
   
   class forwarder_mgr : public incline_driver_async_qtable::forwarder_mgr {

@@ -29,11 +29,14 @@
 #define interthr_call_h
 
 extern "C" {
+#include <alloca.h>
 #include <pthread.h>
 }
 #include <algorithm>
 #include <cassert>
+#include <cstdlib>
 #include <vector>
+#include <map>
 #include "cac/cac_mutex.h"
 
 template <typename Handler, typename Request>
@@ -43,15 +46,10 @@ public:
     friend class interthr_call_t<Handler, Request>;
   protected:
     Request* req_;
-    pthread_cond_t ret_cond_;
-    bool ready_;
+    pthread_cond_t* ret_cond_; // set to NULL upon completion
+    size_t* remaining_calls_; // may be null
   public:
-    call_info_t(Request* req) : req_(req), ready_(false) {
-      pthread_cond_init(&ret_cond_, NULL);
-    }
-    ~call_info_t() {
-      pthread_cond_destroy(&ret_cond_);
-    }
+    call_info_t(Request* req, pthread_cond_t* ret_cond, size_t* remaining_calls) : req_(req), ret_cond_(ret_cond), remaining_calls_(remaining_calls) {}
     Request* request() { return req_; }
   };
   typedef std::vector<call_info_t*> slot_t;
@@ -95,24 +93,45 @@ public:
     return ret;
   }
   void call(Request& req) {
-    call_info_t ci(&req);
-    typename cac_mutex_t<info_t>::lockref info(info_);
-    info->active_slot_->push_back(&ci);
-    pthread_cond_signal(&info->to_worker_cond_);
-    while (! ci.ready_) {
-      pthread_cond_wait(&ci.ret_cond_, info_.mutex());
+    pthread_cond_t ret_cond;
+    pthread_cond_init(&ret_cond, NULL);
+    call_info_t ci(&req, &ret_cond, NULL);
+    {
+      typename cac_mutex_t<info_t>::lockref info(info_);
+      info->active_slot_->push_back(&ci);
+      pthread_cond_signal(&info->to_worker_cond_);
+      while (ci.ret_cond_ != NULL) {
+	pthread_cond_wait(&ret_cond, info_.mutex());
+      }
     }
+    pthread_cond_destroy(&ret_cond);
   }
 protected:
   slot_t& get_slot() {
     slot_t*& handle_slot =
       *reinterpret_cast<slot_t**>(pthread_getspecific(handle_slot_key_));
     typename cac_mutex_t<info_t>::lockref info(info_);
+    bool multi_mutex_is_locked = false;
     for (typename slot_t::iterator i = handle_slot->begin();
 	 i != handle_slot->end();
 	 ++i) {
-      (*i)->ready_ = true;
-      pthread_cond_signal(&(*i)->ret_cond_);
+      if ((*i)->remaining_calls_ == NULL) {
+	// single-call
+	pthread_cond_signal((*i)->ret_cond_);
+      } else {
+	// multi-call
+	if (! multi_mutex_is_locked) {
+	  multi_mutex_is_locked = true;
+	  pthread_mutex_lock(&multi_mutex_);
+	}
+	if (--*(*i)->remaining_calls_ == 0) {
+	  pthread_cond_signal((*i)->ret_cond_);
+	}
+      }
+      (*i)->ret_cond_ = NULL;
+    }
+    if (multi_mutex_is_locked) {
+      pthread_mutex_unlock(&multi_mutex_);
     }
     handle_slot->clear();
     while (info->active_slot_->empty()) {
@@ -124,7 +143,37 @@ protected:
     std::swap(handle_slot, info->active_slot_);
     return *handle_slot;
   }
+protected:
+  static pthread_mutex_t multi_mutex_;
+public:
+  static void call(typename std::map<Handler*, Request*>& mux) {
+    if (mux.empty()) {
+      return;
+    }
+    pthread_cond_t ret_cond;
+    pthread_cond_init(&ret_cond, NULL);
+    size_t remain = mux.size();
+    call_info_t* ci
+      = static_cast<call_info_t*>(alloca(sizeof(call_info_t) * mux.size()));
+    for (typename std::map<Handler*, Request*>::iterator mi = mux.begin();
+	 mi != mux.end();
+	 ++mi, ++ci) {
+      new (ci) call_info_t(mi->second, &ret_cond, &remain);
+      typename cac_mutex_t<info_t>::lockref info(mi->first->info_);
+      info->active_slot_->push_back(ci);
+      pthread_cond_signal(&info->to_worker_cond_);
+    }
+    pthread_mutex_lock(&multi_mutex_);
+    while (remain != 0) {
+      pthread_cond_wait(&ret_cond, &multi_mutex_);
+    }
+    pthread_mutex_unlock(&multi_mutex_);
+    pthread_cond_destroy(&ret_cond);
+  }
 };
+
+template<typename Handler, typename Request>
+pthread_mutex_t interthr_call_t<Handler, Request>::multi_mutex_ = PTHREAD_MUTEX_INITIALIZER;
 
 #ifdef TEST_INTERTHR_CALL
 
