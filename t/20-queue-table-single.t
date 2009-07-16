@@ -56,7 +56,7 @@ ok(system(@incline_cmd, 'create-trigger') == 0, 'create queue');
     my $waitf = sub {
         while (1) {
             my $rows = dbh()->selectall_arrayref(
-                'SELECT COUNT(*) FROM _IQ_incline_dest',
+                'SELECT COUNT(*) FROM _iq_incline_dest',
             ) or die dbh()->errstr;
             return if $rows->[0]->[0] == 0;
             sleep 1;
