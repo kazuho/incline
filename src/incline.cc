@@ -1,3 +1,6 @@
+extern "C" {
+#include <fcntl.h>
+}
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -12,6 +15,9 @@ static getoptpp::opt_str opt_mode('m', "mode", false, "mode", "standalone");
 static getoptpp::opt_str opt_source('s', "source", true, "definition file");
 static getoptpp::opt_str opt_rdbms('r', "rdbms", false, "rdbms name", "mysql");
 static getoptpp::opt_str opt_database('d', "database", true, "database name");
+
+static getoptpp::opt_str opt_forwarder_log_file(0, "forwarder-log-file", false,
+						"", "");
 
 static getoptpp::opt_str opt_shard_source('S', "shard-source", false,
 					  "shard definition file", "");
@@ -188,9 +194,21 @@ main(int argc, char** argv)
     vector<string> stmt(aq_driver()->drop_table_all(true));
     run_all_stmt(dbh, stmt);
   } else if (command == "forward") {
+    int log_fd = -1;
+    if (*opt_forwarder_log_file == "-") {
+      log_fd = 1;
+    } else if (! opt_forwarder_log_file->empty()) {
+      log_fd = open(opt_forwarder_log_file->c_str(),
+		    O_WRONLY | O_APPEND | O_CREAT, 0666);
+      if (log_fd == -1) {
+	fprintf(stderr, "failed to open log file:%s\n",
+		opt_forwarder_log_file->c_str());
+	exit(3);
+      }
+    }
     incline_driver_async_qtable::forwarder_mgr* mgr
       = aq_driver()->create_forwarder_mgr(connect_db, *opt_mysql_host,
-					  *opt_mysql_port, 1, 2);
+					  *opt_mysql_port, 1, log_fd);
     mgr->run();
     delete mgr;
   } else {
