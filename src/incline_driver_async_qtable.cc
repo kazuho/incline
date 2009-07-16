@@ -92,10 +92,10 @@ incline_driver_async_qtable::_create_table_of(const incline_def_async_qtable*
   }
   return string("CREATE ") + (temporary ? "TEMPORARY " : "") + "TABLE "
     + (if_not_exists ? "IF NOT EXISTS " : "") + table_name + " ("
-    + incline_util::join(',', col_defs.begin(), col_defs.end())
+    + incline_util::join(',', col_defs)
     + ",_iq_version INT UNSIGNED NOT NULL DEFAULT 0,PRIMARY KEY("
-    + incline_util::join(',', pk_cols.begin(), pk_cols.end())
-    + ")) ENGINE=" + (temporary ? "MEMORY" : "InnoDB");
+    + incline_util::join(',', pk_cols) + ")) ENGINE="
+    + (temporary ? "MEMORY" : "InnoDB");
 }
 
 vector<string>
@@ -108,23 +108,15 @@ incline_driver_async_qtable::do_build_enqueue_sql(const incline_def* _def,
 {
   const incline_def_async_qtable* def
     = dynamic_cast<const incline_def_async_qtable*>(_def);
-  vector<string> src_cols, dest_cols;
-  for (map<string, string>::const_iterator pi = pk_columns.begin();
-       pi != pk_columns.end();
-       ++pi) {
-    src_cols.push_back(pi->first);
-    dest_cols.push_back(pi->second);
-  }
   string sql = "INSERT INTO " + def->queue_table() + " ("
-    + incline_util::join(',', dest_cols.begin(), dest_cols.end()) + ") SELECT "
-    + incline_util::join(',', src_cols.begin(), src_cols.end());
+    + incline_util::join(',', incline_util::filter("%2", pk_columns))
+    + ") SELECT "
+    + incline_util::join(',', incline_util::filter("%1", pk_columns));
   if (! tables.empty()) {
-    sql += " FROM "
-      + incline_util::join(" INNER JOIN ", tables.begin(), tables.end());
+    sql += " FROM " + incline_util::join(" INNER JOIN ", tables);
   }
   if (! cond.empty()) {
-    sql += " WHERE "
-      + incline_util::join(" AND ", cond.begin(), cond.end());
+    sql += " WHERE " + incline_util::join(" AND ", cond);
   }
   sql += " ON DUPLICATE KEY UPDATE _iq_version=_iq_version+1";
   return incline_util::vectorize(sql);
@@ -135,29 +127,10 @@ incline_driver_async_qtable::forwarder::forwarder(forwarder_mgr* mgr,
 						  incline_def_async_qtable* def,
 						  tmd::conn_t* dbh,
 						  int poll_interval)
-  : mgr_(mgr), def_(def), dbh_(dbh), poll_interval_(poll_interval)
+  : mgr_(mgr), def_(def), dbh_(dbh), poll_interval_(poll_interval),
+    dest_pk_columns_(incline_util::filter("%2", def->pk_columns()))
 {
-  vector<string> dest_cols, src_cols,
-    fetch_src_cond(def->build_merge_cond("", "")), del_queue_cond;
   string temp_table = "_qt_" + def->queue_table();
-  // build column names
-  for (map<string, string>::const_iterator pi = def->pk_columns().begin();
-       pi != def->pk_columns().end();
-       ++pi) {
-    dest_pk_columns_.push_back(pi->second);
-    dest_cols.push_back(pi->second);
-    src_cols.push_back(pi->first);
-    fetch_src_cond.push_back(pi->first + '=' + temp_table + '.' + pi->second);
-    del_queue_cond.push_back(def->queue_table() + '.' + pi->second + '='
-			     + temp_table + '.' + pi->second);
-    
-  }
-  for (map<string, string>::const_iterator ni = def->npk_columns().begin();
-       ni != def->npk_columns().end();
-       ++ni) {
-    dest_cols.push_back(ni->second);
-    src_cols.push_back(ni->first);
-  }
   // create temporary table
   tmd::execute(*dbh_,
 	       mgr_->driver()->_create_table_of(def, temp_table, true, false,
@@ -166,29 +139,42 @@ incline_driver_async_qtable::forwarder::forwarder(forwarder_mgr* mgr,
   copy_to_temp_query_base_ =
     "INSERT INTO " + temp_table + " SELECT * FROM " + def->queue_table();
   fetch_pk_query_ =
-    "SELECT "
-    + incline_util::join(',', dest_pk_columns_.begin(), dest_pk_columns_.end())
-    + " FROM " + temp_table;
-  fetch_src_query_ =
-    "SELECT "
-    + incline_util::join(',', src_cols.begin(), src_cols.end())
-    + " FROM " + temp_table + " INNER JOIN "
-    + incline_util::join(" INNER JOIN ", def->source().begin(),
-			 def->source().end())
-    + " WHERE "
-    + incline_util::join(" AND ", fetch_src_cond.begin(), fetch_src_cond.end());
+    "SELECT " + incline_util::join(',', dest_pk_columns_) + " FROM "
+    + temp_table;
+  {
+    vector<string> src_cols(incline_util::filter("%1", def->pk_columns()));
+    incline_util::push_back(src_cols,
+			    incline_util::filter("%1", def->npk_columns()));
+    vector<string> cond(def->build_merge_cond("", ""));
+    incline_util::push_back(cond, 
+			    incline_util::filter(("%1=" + temp_table + ".%2")
+						 .c_str(),
+						 def->pk_columns()));
+    fetch_src_query_ =
+      "SELECT "
+      + incline_util::join(',', src_cols) + " FROM " + temp_table +
+      " INNER JOIN " + incline_util::join(" INNER JOIN ", def->source())
+      + " WHERE " + incline_util::join(" AND ", cond);
+  }
   delete_queue_query_ =
     "DELETE FROM " + def->queue_table() + " WHERE EXISTS (SELECT * FROM "
     + temp_table + " WHERE "
-    + incline_util::join(" AND ", del_queue_cond.begin(), del_queue_cond.end())
+    + incline_util::join(" AND ",
+			 incline_util::filter((def->queue_table() + ".%2="
+					       + temp_table + ".%2").c_str(),
+					      def->pk_columns()))
     + " AND " + def->queue_table() + "._iq_version=" + temp_table
     + "._iq_version)";
   delete_temp_query_ = "DELETE FROM " + temp_table;
   // build write queries
-  replace_row_query_base_ =
-    "REPLACE INTO " + def->destination() + " ("
-    + incline_util::join(',', dest_cols.begin(), dest_cols.end())
-    + ") VALUES ";
+  {
+    vector<string> dest_cols(incline_util::filter("%2", def->pk_columns()));
+    incline_util::push_back(dest_cols,
+			    incline_util::filter("%2", def->npk_columns()));
+    replace_row_query_base_ =
+      "REPLACE INTO " + def->destination() + " ("
+      + incline_util::join(',', dest_cols) + ") VALUES ";
+  }
   delete_row_query_base_ = "DELETE FROM " + def->destination() + " WHERE ";
 }
 
@@ -269,8 +255,7 @@ incline_driver_async_qtable::forwarder::replace_row(tmd::conn_t& dbh,
     values.push_back("'" + tmd::escape(dbh, res.field(i)) + '\'');
   }
   tmd::execute(dbh, 
-	       replace_row_query_base_ + '('
-	       + incline_util::join(',', values.begin(), values.end())
+	       replace_row_query_base_ + '(' + incline_util::join(',', values)
 	       + ')');
 }
 
@@ -285,8 +270,7 @@ incline_driver_async_qtable::forwarder::delete_row(tmd::conn_t& dbh,
 		    + tmd::escape(dbh, pk_values[i]) + '\'');
   }
   tmd::execute(dbh,
-	       delete_row_query_base_
-	       + incline_util::join(" AND ", dcond.begin(), dcond.end()));
+	       delete_row_query_base_ + incline_util::join(" AND ", dcond));
 }
 
 void*

@@ -102,7 +102,7 @@ namespace incline_driver_sharded_ns {
 	}
       }
       assert(! cond.empty()); // hostport not found
-      return '(' + incline_util::join(" OR ", cond.begin(), cond.end()) + ')';
+      return '(' + incline_util::join(" OR ", cond) + ')';
     }
   };
   
@@ -154,7 +154,7 @@ namespace incline_driver_sharded_ns {
 	}
       }
       assert(! cond.empty()); // hostport not found
-      return '(' + incline_util::join(" OR ", cond.begin(), cond.end()) + ')';
+      return '(' + incline_util::join(" OR ", cond) + ')';
     }
   };
   
@@ -319,9 +319,7 @@ incline_driver_sharded::forwarder::do_get_extra_cond()
     }
   }
   return has_inactive
-    ? (cond.empty()
-       ? string("0")
-       : incline_util::join(" OR ", cond.begin(), cond.end()))
+    ? (cond.empty() ? string("0") : incline_util::join(" OR ", cond))
     : string();
 }
 
