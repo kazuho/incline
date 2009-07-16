@@ -62,11 +62,13 @@ public:
     const std::string src_host_;
     unsigned short src_port_;
     int poll_interval_;
+    int log_fd_;
   public:
-    forwarder_mgr(incline_driver_async_qtable* driver, tmd::conn_t* (*connect)(const char*, unsigned short), const std::string& src_host, unsigned short src_port, int poll_interval) : driver_(driver), connect_(connect), src_host_(src_host), src_port_(src_port), poll_interval_(poll_interval) {}
+    forwarder_mgr(incline_driver_async_qtable* driver, tmd::conn_t* (*connect)(const char*, unsigned short), const std::string& src_host, unsigned short src_port, int poll_interval, int log_fd) : driver_(driver), connect_(connect), src_host_(src_host), src_port_(src_port), poll_interval_(poll_interval), log_fd_(log_fd) {}
     virtual ~forwarder_mgr() {}
     const incline_driver_async_qtable* driver() const { return driver_; }
     virtual void* run();
+    void log_sql(const std::string& sql);
   protected:
     virtual forwarder* do_create_forwarder(const incline_def_async_qtable* def);
   };
@@ -77,8 +79,9 @@ public:
   std::vector<std::string> drop_table_all(bool if_exists) const;
   std::string create_table_of(const incline_def* def, bool if_not_exists, tmd::conn_t& dbh) const;
   std::string drop_table_of(const incline_def* def, bool if_exists) const;
-  virtual forwarder_mgr* create_forwarder_mgr(tmd::conn_t* (*connect)(const char*, unsigned short), const std::string& src_host, unsigned short src_port, int poll_interval) {
-    return new forwarder_mgr(this, connect, src_host, src_port, poll_interval);
+  virtual forwarder_mgr* create_forwarder_mgr(tmd::conn_t* (*connect)(const char*, unsigned short), const std::string& src_host, unsigned short src_port, int poll_interval, int log_fd) {
+    return new forwarder_mgr(this, connect, src_host, src_port, poll_interval,
+			     log_fd);
   }
 protected:
   std::string _create_table_of(const incline_def_async_qtable* def, const std::string& table_name, bool temporary, bool if_not_exists, tmd::conn_t& dbh) const;

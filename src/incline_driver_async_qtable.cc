@@ -1,3 +1,7 @@
+extern "C" {
+#include <sys/uio.h>
+#include <unistd.h>
+}
 #include "start_thread.h"
 #include "tmd.h"
 #include "incline_def_async_qtable.h"
@@ -294,7 +298,8 @@ incline_driver_async_qtable::forwarder::replace_rows(tmd::conn_t& dbh,
     sql += "),(";
   }
   sql.erase(sql.size() - 2);
-  tmd::execute(dbh,  sql);
+  mgr_->log_sql(sql);
+  tmd::execute(dbh, sql);
 }
 
 void
@@ -317,6 +322,7 @@ incline_driver_async_qtable::forwarder::delete_rows(tmd::conn_t& dbh,
     sql += incline_util::join(" AND ", dcond);
     sql.push_back(')');
   }
+  mgr_->log_sql(sql);
   tmd::execute(dbh, sql);
 }
 
@@ -344,6 +350,19 @@ incline_driver_async_qtable::forwarder_mgr::run()
   }
   
   return NULL;
+}
+
+void
+incline_driver_async_qtable::forwarder_mgr::log_sql(const std::string& sql)
+{
+  if (log_fd_ != -1) {
+    struct iovec vec[2];
+    vec[0].iov_base = const_cast<char*>(sql.c_str());
+    vec[0].iov_len = sql.size();
+    vec[1].iov_base = const_cast<char*>(";\n");
+    vec[1].iov_len = 2;
+    writev(log_fd_, vec, 2);
+  }
 }
 
 incline_driver_async_qtable::forwarder*

@@ -190,7 +190,7 @@ main(int argc, char** argv)
   } else if (command == "forward") {
     incline_driver_async_qtable::forwarder_mgr* mgr
       = aq_driver()->create_forwarder_mgr(connect_db, *opt_mysql_host,
-					  *opt_mysql_port, 1);
+					  *opt_mysql_port, 1, 2);
     mgr->run();
     delete mgr;
   } else {
