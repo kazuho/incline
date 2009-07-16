@@ -147,14 +147,19 @@ protected:
   static pthread_mutex_t multi_mutex_;
 public:
   template <typename Iter> static void call(const Iter& first, const Iter& last) {
-    if (first == last) {
+    size_t remain = std::distance(first, last);
+    if (remain == 0) {
+      return;
+    } else if (remain == 1) {
+      Handler* handler = first->first;
+      Request* request = first->second;
+      handler->call(*request);
       return;
     }
-    pthread_cond_t ret_cond;
-    pthread_cond_init(&ret_cond, NULL);
-    size_t remain = std::distance(first, last);
     call_info_t* ci
       = static_cast<call_info_t*>(alloca(sizeof(call_info_t) * remain));
+    pthread_cond_t ret_cond;
+    pthread_cond_init(&ret_cond, NULL);
     for (Iter it = first; it != last; ++it, ++ci) {
       Handler* handler = it->first;
       Request* request = it->second;
