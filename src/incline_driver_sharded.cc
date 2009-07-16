@@ -237,11 +237,11 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
       for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
 	fw_writer_call_t* req = (*si)->request();
 	switch (req->action_) {
-	case fw_writer_call_t::e_replace_row:
-	  req->forwarder_->replace_row(*dbh, *req->replace_row_);
+	case fw_writer_call_t::e_replace_rows:
+	  req->forwarder_->replace_rows(*dbh, *req->rows_);
 	  break;
-	case fw_writer_call_t::e_delete_row:
-	  req->forwarder_->delete_row(*dbh, *req->delete_row_);
+	case fw_writer_call_t::e_delete_rows:
+	  req->forwarder_->delete_rows(*dbh, *req->rows_);
 	  break;
 	default:
 	  assert(0);
@@ -288,18 +288,47 @@ incline_driver_sharded::forwarder::forwarder(forwarder_mgr* mgr,
 }
 
 bool
-incline_driver_sharded::forwarder::do_replace_row(tmd::query_t& res)
+incline_driver_sharded::forwarder::do_replace_rows(const vector<vector<string> >& rows)
 {
-  return mgr()->get_writer_for(res.field(shard_col_index_))
-    ->replace_row(this, res);
+  map<fw_writer*, vector<const vector<string>*> > writer_rows;
+  map_rows_to_writers(writer_rows, rows);
+  for (map<fw_writer*, vector<const vector<string>*> >::const_iterator wi
+	 = writer_rows.begin();
+       wi != writer_rows.end();
+       ++wi) {
+    if (! wi->first->replace_rows(this, wi->second)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 bool
-incline_driver_sharded::forwarder::do_delete_row(const vector<string>&
-						 pk_values)
+incline_driver_sharded::forwarder::do_delete_rows(const vector<vector<string> >&
+						  pk_rows)
 {
-  return mgr()->get_writer_for(pk_values[shard_col_index_])
-    ->delete_row(this, pk_values);
+  map<fw_writer*, vector<const vector<string>*> > writer_rows;
+  map_rows_to_writers(writer_rows, pk_rows);
+  for (map<fw_writer*, vector<const vector<string>*> >::const_iterator wi
+	 = writer_rows.begin();
+       wi != writer_rows.end();
+       ++wi) {
+    if (! wi->first->delete_rows(this, wi->second)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void
+incline_driver_sharded::forwarder::map_rows_to_writers(map<fw_writer*, vector<const vector<string>*> >& writer_rows, const vector<vector<string> >& rows)
+{
+  for (vector<vector<string> >::const_iterator ri = rows.begin();
+       ri != rows.end();
+       ++ri) {
+    writer_rows[mgr()->get_writer_for((*ri)[shard_col_index_])]
+      .push_back(&*ri);
+  }
 }
 
 string

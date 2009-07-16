@@ -36,12 +36,23 @@ public:
     const incline_def_async_qtable* def() const { return def_; }
     void* run();
   protected:
-    virtual bool do_replace_row(tmd::query_t& res);
-    virtual bool do_delete_row(const std::vector<std::string>& pk_values);
+    virtual bool do_replace_rows(const std::vector<std::vector<std::string> >& rows);
+    virtual bool do_delete_rows(const std::vector<std::vector<std::string> >& pk_rows);
     virtual std::string do_get_extra_cond();
   protected:
-    void replace_row(tmd::conn_t& dbh, tmd::query_t& res) const;
-    void delete_row(tmd::conn_t& dbh, const std::vector<std::string>& pk_values) const;
+    void replace_rows(tmd::conn_t& dbh, const std::vector<const std::vector<std::string>*>& rows) const;
+    void delete_rows(tmd::conn_t& dbh, const std::vector<const std::vector<std::string>*>& pk_rows) const;
+  public:
+    static std::vector<const std::vector<std::string>*> to_ptr_rows(const std::vector<std::vector<std::string> >& input) {
+      std::vector<const std::vector<std::string>*> r;
+      for (std::vector<std::vector<std::string> >::const_iterator i
+	     = input.begin();
+	   i != input.end();
+	   ++i) {
+	r.push_back(&*i);
+      }
+      return r;
+    }
   };
   
   class forwarder_mgr {

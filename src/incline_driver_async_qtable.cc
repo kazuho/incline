@@ -187,38 +187,68 @@ void* incline_driver_async_qtable::forwarder::run()
 {
   while (1) {
     vector<string> pk_values;
+    vector<vector<string> > replace_rows;
+    size_t num_rows;
     { // poll the queue table
       string extra_cond = do_get_extra_cond();
       string query = copy_to_temp_query_base_;
       if (! extra_cond.empty()) {
 	query += " WHERE " + extra_cond;
       }
-      query += " LIMIT 1";
+      query += " LIMIT 10";
       tmd::execute(*dbh_, query);
-      if (tmd::affected_rows(*dbh_) == 0) {
+      num_rows = tmd::affected_rows(*dbh_);
+      if (num_rows == 0) {
 	sleep(poll_interval_);
 	continue;
       }
     }
-    { // fetch the pks
-      tmd::query_t res(*dbh_, fetch_pk_query_);
-      assert(! res.fetch().eof());
+    // fetch rows to replace
+    for (tmd::query_t res(*dbh_, fetch_src_query_);
+	 ! res.fetch().eof();
+	 ) {
+      replace_rows.push_back(vector<string>());
       for (size_t i = 0; i < res.num_fields(); ++i) {
-	pk_values.push_back(res.field(i));
+	replace_rows.back().push_back(res.field(i));
       }
     }
-    // we have a row in queue, handle it
-    tmd::query_t res(*dbh_, fetch_src_query_);
-    bool success;
-    if (! res.fetch().eof()) {
-      success = do_replace_row(res);
-    } else {
-      success = do_delete_row(pk_values);
+    if (! replace_rows.empty()) {
+      if (! do_replace_rows(replace_rows)) {
+	goto FAIL;
+      }
+    }
+    // remove rows if we need to
+    if (replace_rows.size() != num_rows) {
+      vector<vector<string> > delete_pks;
+      for (tmd::query_t res(*dbh_, fetch_pk_query_);
+	   ! res.fetch().eof();
+	   ) {
+	for (vector<vector<string> >::const_iterator ri = replace_rows.begin();
+	     ri != replace_rows.end();
+	     ++ri) {
+	  for (size_t i = 0; i < res.num_fields(); ++i) {
+	    if ((*ri)[i] != res.field(i)) {
+	      goto ROW_NOT_EQUAL;
+	    }
+	  }
+	  goto NEXT_ROW;
+	ROW_NOT_EQUAL:
+	  ;
+	}
+	delete_pks.push_back(vector<string>());
+	for (size_t i = 0; i < res.num_fields(); ++i) {
+	  delete_pks.back().push_back(res.field(i));
+	}
+      NEXT_ROW:
+	;
+      }
+      if (! do_delete_rows(delete_pks)) {
+	goto FAIL;
+      }
     }
     // remove from queue
-    if (success) {
-      tmd::execute(*dbh_, delete_queue_query_);
-    }
+    tmd::execute(*dbh_, delete_queue_query_);
+  FAIL:
     tmd::execute(*dbh_, delete_temp_query_);
   }
   
@@ -226,17 +256,16 @@ void* incline_driver_async_qtable::forwarder::run()
 }
 
 bool
-incline_driver_async_qtable::forwarder::do_replace_row(tmd::query_t& res)
+incline_driver_async_qtable::forwarder::do_replace_rows(const vector<vector<string> >& rows)
 {
-  replace_row(*dbh_, res);
+  replace_rows(*dbh_, to_ptr_rows(rows));
   return true;
 }
 
 bool
-incline_driver_async_qtable::forwarder::do_delete_row(const vector<string>&
-						      pk_values)
+incline_driver_async_qtable::forwarder::do_delete_rows(const vector<vector<string> >& pk_rows)
 {
-  delete_row(*dbh_, pk_values);
+  delete_rows(*dbh_, to_ptr_rows(pk_rows));
   return true;
 }
 
@@ -247,30 +276,48 @@ incline_driver_async_qtable::forwarder::do_get_extra_cond()
 }
 
 void
-incline_driver_async_qtable::forwarder::replace_row(tmd::conn_t& dbh,
-						    tmd::query_t& res) const
+incline_driver_async_qtable::forwarder::replace_rows(tmd::conn_t& dbh,
+						     const vector<const vector<string>*>& rows) const
 {
-  vector<string> values;
-  for (size_t i = 0; i < res.num_fields(); ++i) {
-    values.push_back("'" + tmd::escape(dbh, res.field(i)) + '\'');
+  string sql = replace_row_query_base_ + '(';
+  for (vector<const vector<string>*>::const_iterator ri = rows.begin();
+       ri != rows.end();
+       ++ri) {
+    for (vector<string>::const_iterator ci = (*ri)->begin();
+	 ci != (*ri)->end();
+	 ++ci) {
+      sql.push_back('\'');
+      sql += tmd::escape(dbh, *ci);
+      sql += "',";
+    }
+    sql.erase(sql.size() - 1);
+    sql += "),(";
   }
-  tmd::execute(dbh, 
-	       replace_row_query_base_ + '(' + incline_util::join(',', values)
-	       + ')');
+  sql.erase(sql.size() - 2);
+  tmd::execute(dbh,  sql);
 }
 
 void
-incline_driver_async_qtable::forwarder::delete_row(tmd::conn_t& dbh,
-						   const vector<string>&
-						   pk_values) const
+incline_driver_async_qtable::forwarder::delete_rows(tmd::conn_t& dbh,
+						    const vector<const vector<string>*>& pk_rows) const
 {
-  vector<string> dcond;
-  for (size_t i = 0; i < dest_pk_columns_.size(); ++i) {
-    dcond.push_back(dest_pk_columns_[i] + "='"
-		    + tmd::escape(dbh, pk_values[i]) + '\'');
+  string sql = delete_row_query_base_;
+  for (vector<const vector<string>*>::const_iterator ri = pk_rows.begin();
+       ri != pk_rows.end();
+       ++ri) {
+    vector<string> dcond;
+    for (size_t i = 0; i < (*ri)->size(); ++i) {
+      dcond.push_back(dest_pk_columns_[i] + "='"
+		      + tmd::escape(dbh, (**ri)[i]) + '\'');
+    }
+    if (ri != pk_rows.begin()) {
+      sql += " OR ";
+    }
+    sql.push_back('(');
+    sql += incline_util::join(" AND ", dcond);
+    sql.push_back(')');
   }
-  tmd::execute(dbh,
-	       delete_row_query_base_ + incline_util::join(" AND ", dcond));
+  tmd::execute(dbh, sql);
 }
 
 void*

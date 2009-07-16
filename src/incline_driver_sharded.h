@@ -21,17 +21,14 @@ public:
   
   struct fw_writer_call_t {
     enum {
-      e_replace_row,
-      e_delete_row,
-    } action_;
+      e_replace_rows,
+      e_delete_rows,
+    };
+    int action_;
     bool success_;
     forwarder* forwarder_;
-    union {
-      tmd::query_t* replace_row_;
-      const std::vector<std::string>* delete_row_;
-    };
-    fw_writer_call_t(forwarder* f, tmd::query_t* r) : action_(e_replace_row), success_(false), forwarder_(f) { replace_row_ = r; }
-    fw_writer_call_t(forwarder* f, const std::vector<std::string>* d) : action_(e_delete_row), success_(false), forwarder_(f) { delete_row_ = d; }
+    const std::vector<const std::vector<std::string>*>* rows_;
+    fw_writer_call_t(forwarder* f, int action, const std::vector<const std::vector<std::string>*>* rows) : action_(action), success_(false), forwarder_(f), rows_(rows) {}
   };
   
   class fw_writer : public interthr_call_t<fw_writer, fw_writer_call_t> {
@@ -44,13 +41,13 @@ public:
     bool is_active() const {
       return retry_at_ == 0 || retry_at_ <= time(NULL);
     }
-    bool replace_row(forwarder* forwarder, tmd::query_t& res) {
-      fw_writer_call_t c(forwarder, &res);
+    bool replace_rows(forwarder* forwarder, const std::vector<const std::vector<std::string>*>& rows) {
+      fw_writer_call_t c(forwarder, fw_writer_call_t::e_replace_rows, &rows);
       call(c);
       return c.success_;
     }
-    bool delete_row(forwarder* forwarder, const std::vector<std::string>& pk_values) {
-      fw_writer_call_t c(forwarder, &pk_values);
+    bool delete_rows(forwarder* forwarder, const std::vector<const std::vector<std::string>*>& pk_rows) {
+      fw_writer_call_t c(forwarder, fw_writer_call_t::e_delete_rows, &pk_rows);
       call(c);
       return c.success_;
     }
@@ -72,8 +69,9 @@ public:
     const incline_def_sharded* def() const {
       return static_cast<const incline_def_sharded*>(super::def());
     }
-    virtual bool do_replace_row(tmd::query_t& res);
-    virtual bool do_delete_row(const std::vector<std::string>& pk_values);
+    virtual bool do_replace_rows(const std::vector<std::vector<std::string> >& rows);
+    virtual bool do_delete_rows(const std::vector<std::vector<std::string> >& pk_rows);
+    void map_rows_to_writers(std::map<fw_writer*, std::vector<const std::vector<std::string>*> >& writer_rows, const std::vector<std::vector<std::string> >& rows);
     virtual std::string do_get_extra_cond();
   };
   

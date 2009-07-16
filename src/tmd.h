@@ -196,7 +196,7 @@ namespace tmd {
     query_t(MYSQL* mysql, const std::string& sql)
       : row_(NULL), lengths_(NULL), num_fields_(0) {
       execute(mysql, sql);
-      res_ = mysql_store_result(mysql);
+      res_ = mysql_use_result(mysql);
       assert(res_ != NULL);
       num_fields_ = mysql_num_fields(res_);
     }
@@ -217,7 +217,7 @@ namespace tmd {
       lengths_ = mysql_fetch_lengths(res_);
       return *this;
     }
-    unsigned int num_fields() const { return num_fields_; }
+    size_t num_fields() const { return num_fields_; }
     bool eof() const { return row_ == NULL; }
     const char* field(size_t idx) const { return row_[idx]; }
     unsigned long field_length(size_t idx) const { return lengths_[idx]; }
