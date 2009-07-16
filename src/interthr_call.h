@@ -146,20 +146,20 @@ protected:
 protected:
   static pthread_mutex_t multi_mutex_;
 public:
-  static void call(typename std::map<Handler*, Request*>& mux) {
-    if (mux.empty()) {
+  template <typename Iter> static void call(const Iter& first, const Iter& last) {
+    if (first == last) {
       return;
     }
     pthread_cond_t ret_cond;
     pthread_cond_init(&ret_cond, NULL);
-    size_t remain = mux.size();
+    size_t remain = std::distance(first, last);
     call_info_t* ci
-      = static_cast<call_info_t*>(alloca(sizeof(call_info_t) * mux.size()));
-    for (typename std::map<Handler*, Request*>::iterator mi = mux.begin();
-	 mi != mux.end();
-	 ++mi, ++ci) {
-      new (ci) call_info_t(mi->second, &ret_cond, &remain);
-      typename cac_mutex_t<info_t>::lockref info(mi->first->info_);
+      = static_cast<call_info_t*>(alloca(sizeof(call_info_t) * remain));
+    for (Iter it = first; it != last; ++it, ++ci) {
+      Handler* handler = it->first;
+      Request* request = it->second;
+      new (ci) call_info_t(request, &ret_cond, &remain);
+      typename cac_mutex_t<info_t>::lockref info(handler->info_);
       info->active_slot_->push_back(ci);
       pthread_cond_signal(&info->to_worker_cond_);
     }

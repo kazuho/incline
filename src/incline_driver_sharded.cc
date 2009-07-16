@@ -288,7 +288,7 @@ incline_driver_sharded::forwarder::do_update_rows(const vector<vector<string> >&
   map<fw_writer*, fw_writer_call_t*> calls;
   _setup_calls(calls, replace_rows, &fw_writer_call_t::replace_rows_);
   _setup_calls(calls, delete_rows, &fw_writer_call_t::delete_rows_);
-  fw_writer::call(calls);
+  fw_writer::call(calls.begin(), calls.end());
   bool r = true;
   for (map<fw_writer*, fw_writer_call_t*>::iterator ci = calls.begin();
        ci != calls.end();
