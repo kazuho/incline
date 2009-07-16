@@ -236,16 +236,11 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
       tmd::execute(*dbh, "BEGIN");
       for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
 	fw_writer_call_t* req = (*si)->request();
-	switch (req->action_) {
-	case fw_writer_call_t::e_replace_rows:
-	  req->forwarder_->replace_rows(*dbh, *req->rows_);
-	  break;
-	case fw_writer_call_t::e_delete_rows:
-	  req->forwarder_->delete_rows(*dbh, *req->rows_);
-	  break;
-	default:
-	  assert(0);
-	  break;
+	if (! req->replace_rows_->empty()) {
+	  req->forwarder_->replace_rows(*dbh, *req->replace_rows_);
+	}
+	if (! req->delete_rows_->empty()) {
+	  req->forwarder_->delete_rows(*dbh, *req->delete_rows_);
 	}
       }
       tmd::execute(*dbh, "COMMIT");
@@ -288,47 +283,37 @@ incline_driver_sharded::forwarder::forwarder(forwarder_mgr* mgr,
 }
 
 bool
-incline_driver_sharded::forwarder::do_replace_rows(const vector<vector<string> >& rows)
+incline_driver_sharded::forwarder::do_update_rows(const vector<vector<string> >& replace_rows, const vector<vector<string> >& delete_rows)
 {
-  map<fw_writer*, vector<const vector<string>*> > writer_rows;
-  map_rows_to_writers(writer_rows, rows);
-  for (map<fw_writer*, vector<const vector<string>*> >::const_iterator wi
-	 = writer_rows.begin();
-       wi != writer_rows.end();
-       ++wi) {
-    if (! wi->first->replace_rows(this, wi->second)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-bool
-incline_driver_sharded::forwarder::do_delete_rows(const vector<vector<string> >&
-						  pk_rows)
-{
-  map<fw_writer*, vector<const vector<string>*> > writer_rows;
-  map_rows_to_writers(writer_rows, pk_rows);
-  for (map<fw_writer*, vector<const vector<string>*> >::const_iterator wi
-	 = writer_rows.begin();
-       wi != writer_rows.end();
-       ++wi) {
-    if (! wi->first->delete_rows(this, wi->second)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-void
-incline_driver_sharded::forwarder::map_rows_to_writers(map<fw_writer*, vector<const vector<string>*> >& writer_rows, const vector<vector<string> >& rows)
-{
-  for (vector<vector<string> >::const_iterator ri = rows.begin();
-       ri != rows.end();
+  map<fw_writer*,
+    pair<vector<const vector<string>*>, vector<const vector<string>*> >
+    > writer_rows;
+  
+  for (vector<vector<string> >::const_iterator ri = replace_rows.begin();
+       ri != replace_rows.end();
        ++ri) {
     writer_rows[mgr()->get_writer_for((*ri)[shard_col_index_])]
-      .push_back(&*ri);
+      .first.push_back(&*ri);
   }
+  for (vector<vector<string> >::const_iterator ri = delete_rows.begin();
+       ri != delete_rows.end();
+       ++ri) {
+    writer_rows[mgr()->get_writer_for((*ri)[shard_col_index_])]
+      .second.push_back(&*ri);
+  }
+  
+  for (map<fw_writer*,
+	 pair<vector<const vector<string>*>, vector<const vector<string>*> >
+	 >::const_iterator wi = writer_rows.begin();
+       wi != writer_rows.end();
+       ++wi) {
+    fw_writer_call_t call(this, &wi->second.first, &wi->second.second);
+    wi->first->call(call);
+    if (! call.success_) {
+      return false;
+    }
+  }
+  return true;
 }
 
 string

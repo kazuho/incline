@@ -20,15 +20,11 @@ public:
   class forwarder_mgr;
   
   struct fw_writer_call_t {
-    enum {
-      e_replace_rows,
-      e_delete_rows,
-    };
-    int action_;
-    bool success_;
     forwarder* forwarder_;
-    const std::vector<const std::vector<std::string>*>* rows_;
-    fw_writer_call_t(forwarder* f, int action, const std::vector<const std::vector<std::string>*>* rows) : action_(action), success_(false), forwarder_(f), rows_(rows) {}
+    const std::vector<const std::vector<std::string>*>* replace_rows_,
+      * delete_rows_;
+    bool success_;
+    fw_writer_call_t(forwarder* f, const std::vector<const std::vector<std::string>*>* replace_rows, const std::vector<const std::vector<std::string>*>* delete_rows) : forwarder_(f), replace_rows_(replace_rows), delete_rows_(delete_rows), success_(false) {}
   };
   
   class fw_writer : public interthr_call_t<fw_writer, fw_writer_call_t> {
@@ -40,16 +36,6 @@ public:
     fw_writer(forwarder_mgr* mgr, const std::string& hostport) : mgr_(mgr), hostport_(hostport), retry_at_(0) {}
     bool is_active() const {
       return retry_at_ == 0 || retry_at_ <= time(NULL);
-    }
-    bool replace_rows(forwarder* forwarder, const std::vector<const std::vector<std::string>*>& rows) {
-      fw_writer_call_t c(forwarder, fw_writer_call_t::e_replace_rows, &rows);
-      call(c);
-      return c.success_;
-    }
-    bool delete_rows(forwarder* forwarder, const std::vector<const std::vector<std::string>*>& pk_rows) {
-      fw_writer_call_t c(forwarder, fw_writer_call_t::e_delete_rows, &pk_rows);
-      call(c);
-      return c.success_;
     }
     void* do_handle_calls(int);
   };
@@ -69,8 +55,7 @@ public:
     const incline_def_sharded* def() const {
       return static_cast<const incline_def_sharded*>(super::def());
     }
-    virtual bool do_replace_rows(const std::vector<std::vector<std::string> >& rows);
-    virtual bool do_delete_rows(const std::vector<std::vector<std::string> >& pk_rows);
+    virtual bool do_update_rows(const std::vector<std::vector<std::string> >& update_rows, const std::vector<std::vector<std::string> >& delete_rows);
     void map_rows_to_writers(std::map<fw_writer*, std::vector<const std::vector<std::string>*> >& writer_rows, const std::vector<std::vector<std::string> >& rows);
     virtual std::string do_get_extra_cond();
   };

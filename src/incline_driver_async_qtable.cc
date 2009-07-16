@@ -191,7 +191,7 @@ void* incline_driver_async_qtable::forwarder::run()
 {
   while (1) {
     vector<string> pk_values;
-    vector<vector<string> > replace_rows;
+    vector<vector<string> > replace_rows, delete_pks;
     size_t num_rows;
     { // poll the queue table
       string extra_cond = do_get_extra_cond();
@@ -216,14 +216,8 @@ void* incline_driver_async_qtable::forwarder::run()
 	replace_rows.back().push_back(res.field(i));
       }
     }
-    if (! replace_rows.empty()) {
-      if (! do_replace_rows(replace_rows)) {
-	goto FAIL;
-      }
-    }
     // remove rows if we need to
     if (replace_rows.size() != num_rows) {
-      vector<vector<string> > delete_pks;
       for (tmd::query_t res(*dbh_, fetch_pk_query_);
 	   ! res.fetch().eof();
 	   ) {
@@ -246,13 +240,12 @@ void* incline_driver_async_qtable::forwarder::run()
       NEXT_ROW:
 	;
       }
-      if (! do_delete_rows(delete_pks)) {
-	goto FAIL;
-      }
     }
-    // remove from queue
-    tmd::execute(*dbh_, delete_queue_query_);
-  FAIL:
+    // update and remove from queue if successful
+    if (do_update_rows(replace_rows, delete_pks)) {
+      tmd::execute(*dbh_, delete_queue_query_);
+    }
+    // clean the temp table
     tmd::execute(*dbh_, delete_temp_query_);
   }
   
@@ -260,16 +253,14 @@ void* incline_driver_async_qtable::forwarder::run()
 }
 
 bool
-incline_driver_async_qtable::forwarder::do_replace_rows(const vector<vector<string> >& rows)
+incline_driver_async_qtable::forwarder::do_update_rows(const vector<vector<string> >& replace_rows, const vector<vector<string> >& delete_rows)
 {
-  replace_rows(*dbh_, to_ptr_rows(rows));
-  return true;
-}
-
-bool
-incline_driver_async_qtable::forwarder::do_delete_rows(const vector<vector<string> >& pk_rows)
-{
-  delete_rows(*dbh_, to_ptr_rows(pk_rows));
+  if (! replace_rows.empty()) {
+    this->replace_rows(*dbh_, to_ptr_rows(replace_rows));
+  }
+  if (! delete_rows.empty()) {
+    this->delete_rows(*dbh_, to_ptr_rows(delete_rows));
+  }
   return true;
 }
 
