@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cstdarg>
 #include "incline_util.h"
 
