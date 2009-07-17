@@ -232,8 +232,17 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
       continue;
     }
     // commit data
+    bool use_transaction = true;
+    if (slot.size() == 1) {
+      fw_writer_call_t* req = slot.front()->request();
+      if (req->replace_rows_->empty() || req->delete_rows_->empty()) {
+	use_transaction = false;
+      }
+    }
     try {
-      tmd::execute(*dbh, "BEGIN");
+      if (use_transaction) {
+	tmd::execute(*dbh, "BEGIN");
+      }
       for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
 	fw_writer_call_t* req = (*si)->request();
 	if (! req->replace_rows_->empty()) {
@@ -243,7 +252,9 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
 	  req->forwarder_->delete_rows(*dbh, *req->delete_rows_);
 	}
       }
-      tmd::execute(*dbh, "COMMIT");
+      if (use_transaction) {
+	tmd::execute(*dbh, "COMMIT");
+      }
       for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
 	fw_writer_call_t* req = (*si)->request();
 	req->success_ = true;
