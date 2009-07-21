@@ -140,11 +140,11 @@ incline_driver_async_qtable::forwarder::forwarder(forwarder_mgr* mgr,
 	       mgr_->driver()->_create_table_of(def, temp_table, true, false,
 						*dbh_));
   // build read queries
-  copy_to_temp_query_base_ =
-    "INSERT INTO " + temp_table + " SELECT * FROM " + def->queue_table();
-  fetch_pk_query_ =
-    "SELECT " + incline_util::join(',', dest_pk_columns_) + " FROM "
-    + temp_table;
+  copy_to_temp_query_base_
+    = "INSERT INTO " + temp_table + " SELECT * FROM " + def->queue_table();
+  fetch_queue_query_
+    = "SELECT " + incline_util::join(',', dest_pk_columns_)
+    + ",_iq_version FROM " + temp_table;
   {
     vector<string> src_cols(incline_util::filter("%1", def->pk_columns()));
     incline_util::push_back(src_cols,
@@ -154,21 +154,13 @@ incline_driver_async_qtable::forwarder::forwarder(forwarder_mgr* mgr,
 			    incline_util::filter(("%1=" + temp_table + ".%2")
 						 .c_str(),
 						 def->pk_columns()));
-    fetch_src_query_ =
-      "SELECT "
+    fetch_src_query_
+      = "SELECT "
       + incline_util::join(',', src_cols) + " FROM " + temp_table +
       " INNER JOIN " + incline_util::join(" INNER JOIN ", def->source())
       + " WHERE " + incline_util::join(" AND ", cond);
   }
-  delete_queue_query_ =
-    "DELETE FROM " + def->queue_table() + " WHERE EXISTS (SELECT * FROM "
-    + temp_table + " WHERE "
-    + incline_util::join(" AND ",
-			 incline_util::filter((def->queue_table() + ".%2="
-					       + temp_table + ".%2").c_str(),
-					      def->pk_columns()))
-    + " AND " + def->queue_table() + "._iq_version=" + temp_table
-    + "._iq_version)";
+  delete_queue_query_base_  = "DELETE FROM " + def->queue_table() + " WHERE ";
   delete_temp_query_ = "DELETE FROM " + temp_table;
   // build write queries
   {
@@ -190,63 +182,93 @@ incline_driver_async_qtable::forwarder::~forwarder()
 void* incline_driver_async_qtable::forwarder::run()
 {
   while (1) {
-    vector<string> pk_values;
-    vector<vector<string> > replace_rows, delete_pks;
-    size_t num_rows;
-    { // poll the queue table
-      string extra_cond = do_get_extra_cond();
-      string query = copy_to_temp_query_base_;
-      if (! extra_cond.empty()) {
-	query += " WHERE " + extra_cond;
+    try {
+      vector<vector<string> > queue_rows, replace_rows, delete_pks;
+      size_t num_rows;
+      { // poll the queue table
+	string extra_cond = do_get_extra_cond();
+	string query = copy_to_temp_query_base_;
+	if (! extra_cond.empty()) {
+	  query += " WHERE " + extra_cond;
+	}
+	query += " LIMIT 500";
+	tmd::execute(*dbh_, query);
+	num_rows = tmd::affected_rows(*dbh_);
+	if (num_rows == 0) {
+	  sleep(poll_interval_);
+	  continue;
+	}
       }
-      query += " LIMIT 10";
-      tmd::execute(*dbh_, query);
-      num_rows = tmd::affected_rows(*dbh_);
-      if (num_rows == 0) {
-	sleep(poll_interval_);
-	continue;
-      }
-    }
-    // fetch rows to replace
-    for (tmd::query_t res(*dbh_, fetch_src_query_);
-	 ! res.fetch().eof();
-	 ) {
-      replace_rows.push_back(vector<string>());
-      for (size_t i = 0; i < res.num_fields(); ++i) {
-	replace_rows.back().push_back(res.field(i));
-      }
-    }
-    // remove rows if we need to
-    if (replace_rows.size() != num_rows) {
-      for (tmd::query_t res(*dbh_, fetch_pk_query_);
+      // fetch list of pks and iq_version
+      for (tmd::query_t res(*dbh_, fetch_queue_query_);
 	   ! res.fetch().eof();
 	   ) {
-	for (vector<vector<string> >::const_iterator ri = replace_rows.begin();
-	     ri != replace_rows.end();
-	     ++ri) {
-	  for (size_t i = 0; i < res.num_fields(); ++i) {
-	    if ((*ri)[i] != res.field(i)) {
-	      goto ROW_NOT_EQUAL;
+	queue_rows.push_back(vector<string>());
+	for (size_t i = 0; i < res.num_fields(); ++i) {
+	  queue_rows.back().push_back(res.field(i));
+	}
+      }
+      // fetch rows to replace
+      for (tmd::query_t res(*dbh_, fetch_src_query_);
+	   ! res.fetch().eof();
+	   ) {
+	replace_rows.push_back(vector<string>());
+	for (size_t i = 0; i < res.num_fields(); ++i) {
+	  replace_rows.back().push_back(res.field(i));
+	}
+      }
+      // remove rows if we need to
+      if (replace_rows.size() != num_rows) {
+	vector<string> delete_cond;
+	for (vector<vector<string> >::const_iterator qi = queue_rows.begin();
+	     qi != queue_rows.end();
+	     ++qi) {
+	  for (vector<vector<string> >::const_iterator ri
+		 = replace_rows.begin();
+	       ri != replace_rows.end();
+	       ++ri) {
+	    for (size_t i = 0; i < qi->size() - 1; ++i) {
+	      if ((*ri)[i] != (*qi)[i]) {
+		goto ROW_NOT_EQUAL;
+	      }
 	    }
+	    goto NEXT_ROW;
+	  ROW_NOT_EQUAL:
+	    ;
 	  }
-	  goto NEXT_ROW;
-	ROW_NOT_EQUAL:
+	  delete_pks.push_back(vector<string>());
+	  for (size_t i = 0; i < qi->size() - 1; ++i) {
+	    delete_pks.back().push_back((*qi)[i]);
+	  }
+	NEXT_ROW:
 	  ;
 	}
-	delete_pks.push_back(vector<string>());
-	for (size_t i = 0; i < res.num_fields(); ++i) {
-	  delete_pks.back().push_back(res.field(i));
+      }
+      // update and remove from queue if successful
+      if (do_update_rows(replace_rows, delete_pks)) {
+	vector<string> colnames(dest_pk_columns_), conds;
+	colnames.push_back("_iq_version");
+	for (vector<vector<string> >::const_iterator qi = queue_rows.begin();
+	     qi != queue_rows.end();
+	     ++qi) {
+	  conds.push_back("(" + _build_pk_cond(*dbh_, colnames, *qi) + ')');
 	}
-      NEXT_ROW:
-	;
+	tmd::execute(*dbh_,
+		     delete_queue_query_base_
+		     + incline_util::join(" OR ", conds));
+      }
+      // clean the temp table
+      tmd::execute(*dbh_, delete_temp_query_);
+    } catch (tmd::error_t& e) {
+      switch (e.mysql_errno()) {
+      case ER_LOCK_DEADLOCK:
+      case ER_LOCK_WAIT_TIMEOUT:
+	// just retry
+	break;
+      default:
+	throw;
       }
     }
-    // update and remove from queue if successful
-    if (do_update_rows(replace_rows, delete_pks)) {
-      tmd::execute(*dbh_, delete_queue_query_);
-    }
-    // clean the temp table
-    tmd::execute(*dbh_, delete_temp_query_);
   }
   
   return NULL;
@@ -297,24 +319,30 @@ void
 incline_driver_async_qtable::forwarder::delete_rows(tmd::conn_t& dbh,
 						    const vector<const vector<string>*>& pk_rows) const
 {
-  string sql = delete_row_query_base_;
-  for (vector<const vector<string>*>::const_iterator ri = pk_rows.begin();
-       ri != pk_rows.end();
-       ++ri) {
-    vector<string> dcond;
-    for (size_t i = 0; i < (*ri)->size(); ++i) {
-      dcond.push_back(dest_pk_columns_[i] + "='"
-		      + tmd::escape(dbh, (**ri)[i]) + '\'');
-    }
-    if (ri != pk_rows.begin()) {
-      sql += " OR ";
-    }
-    sql.push_back('(');
-    sql += incline_util::join(" AND ", dcond);
-    sql.push_back(')');
+  vector<string> conds;
+  for (vector<const vector<string>*>::const_iterator pi = pk_rows.begin();
+       pi != pk_rows.end();
+       ++pi) {
+    conds.push_back("(" + _build_pk_cond(dbh, dest_pk_columns_, **pi) + ')');
   }
+  string sql = delete_row_query_base_ + incline_util::join(" OR ", conds);
   mgr_->log_sql(sql);
   tmd::execute(dbh, sql);
+}
+
+string
+incline_driver_async_qtable::forwarder::_build_pk_cond(tmd::conn_t& dbh,
+						       const vector<string>&
+						       colnames,
+						       const vector<string>&
+						       rows)
+{
+  assert(colnames.size() == rows.size());
+  vector<string> cond;
+  for (size_t i = 0; i < rows.size(); ++i) {
+    cond.push_back(colnames[i] + "='" + tmd::escape(dbh, rows[i]) + '\'');
+  }
+  return incline_util::join(" AND ", cond);
 }
 
 void*

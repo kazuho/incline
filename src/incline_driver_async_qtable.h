@@ -22,9 +22,9 @@ public:
     int poll_interval_;
     std::vector<std::string> dest_pk_columns_;
     std::string copy_to_temp_query_base_;
-    std::string fetch_pk_query_;
+    std::string fetch_queue_query_;
     std::string fetch_src_query_;
-    std::string delete_queue_query_;
+    std::string delete_queue_query_base_;
     std::string delete_temp_query_;
     std::string replace_row_query_base_;
     std::string delete_row_query_base_;
@@ -52,6 +52,8 @@ public:
       }
       return r;
     }
+  protected:
+    static std::string _build_pk_cond(tmd::conn_t& dbh, const std::vector<std::string>& colnames, const std::vector<std::string>& rows);
   };
   
   class forwarder_mgr {

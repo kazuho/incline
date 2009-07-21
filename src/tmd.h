@@ -33,6 +33,7 @@ extern "C" {
 #include <assert.h>
 #include <stdarg.h>
 #include <mysql.h>
+#include <mysqld_error.h>
 }
 #include <stdexcept>
 #include <string>
@@ -51,10 +52,14 @@ namespace tmd {
   }    
   
   class error_t : public std::domain_error {
+  protected:
+    unsigned int mysql_errno_;
   public:
-    error_t(const std::string& s) : std::domain_error(s) {
-      fprintf(stderr, "%s\n", s.c_str());
+    error_t(const std::string& s, unsigned int mysql_errno = 0)
+      : std::domain_error(s), mysql_errno_(mysql_errno) {
+      fprintf(stderr, "%d:%s\n", mysql_errno, s.c_str());
     }
+    unsigned int mysql_errno() const { return mysql_errno_; }
   };
   
   inline std::string getenvif(const std::string& name, const std::string& defval)
@@ -155,7 +160,8 @@ namespace tmd {
     int ret = mysql_query(mysql, sql);
     if (ret != 0) {
       throw error_t(ssprintf("mysql error:%s for sql: %s\n", mysql_error(mysql),
-			     sql));
+			     sql),
+		    mysql_errno(mysql));
     }
   }
   
@@ -259,7 +265,8 @@ namespace tmd {
 				 database_.c_str(),
 				 user_.c_str(),
 				 host_.c_str(),
-				 port_));
+				 port_),
+			mysql_errno(conn_));
 	}
       }
       return conn_;
