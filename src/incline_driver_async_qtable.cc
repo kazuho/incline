@@ -257,8 +257,6 @@ void* incline_driver_async_qtable::forwarder::run()
 		     delete_queue_query_base_
 		     + incline_util::join(" OR ", conds));
       }
-      // clean the temp table
-      tmd::execute(*dbh_, delete_temp_query_);
     } catch (tmd::error_t& e) {
       switch (e.mysql_errno()) {
       case ER_LOCK_DEADLOCK:
@@ -269,6 +267,8 @@ void* incline_driver_async_qtable::forwarder::run()
 	throw;
       }
     }
+    // clear the temp table
+    tmd::execute(*dbh_, delete_temp_query_);
   }
   
   return NULL;
