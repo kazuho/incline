@@ -191,7 +191,7 @@ void* incline_driver_async_qtable::forwarder::run()
 	if (! extra_cond.empty()) {
 	  query += " WHERE " + extra_cond;
 	}
-	query += " LIMIT 500";
+	query += " LIMIT 50";
 	tmd::execute(*dbh_, query);
 	num_rows = tmd::affected_rows(*dbh_);
 	if (num_rows == 0) {
