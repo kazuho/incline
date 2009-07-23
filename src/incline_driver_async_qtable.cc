@@ -76,7 +76,7 @@ incline_driver_async_qtable::_create_table_of(const incline_def_async_qtable*
        ci != def->columns().end();
        ++ci) {
     tmd::query_t res(dbh,
-		     "SELECT COLUMN_TYPE,CHARACTER_SET_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s' AND COLUMN_NAME='%s'",
+		     "SELECT UPPER(COLUMN_TYPE),CHARACTER_SET_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s' AND COLUMN_NAME='%s'",
 		     tmd::escape(dbh, mgr_->db_name()).c_str(),
 		     tmd::escape(dbh, def->destination()).c_str(),
 		     tmd::escape(dbh, ci->second).c_str());
@@ -89,11 +89,13 @@ incline_driver_async_qtable::_create_table_of(const incline_def_async_qtable*
     if (res.field(1) != NULL) {
       col_defs.back() += string(" CHARSET ") + res.field(1);
     }
+    col_defs.back() += strcmp(res.field(0), "TIMESTAMP") == 0
+      ? " NULL DEFAULT NULL" : " DEFAULT NULL";
   }
   return string("CREATE TABLE ") + (if_not_exists ? "IF NOT EXISTS " : "")
     + table_name
     + (" (_iq_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,"
-       " _iq_action CHAR(1) CHARACTER SET latin1,")
+       " _iq_action CHAR(1) CHARACTER SET latin1 NOT NULL,")
     + incline_util::join(',', col_defs)
     + ",PRIMARY KEY (_iq_id)) ENGINE InnoDB";
 }

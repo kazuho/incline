@@ -157,7 +157,7 @@ incline_driver_standalone::_build_insert_from_def(const incline_def *def,
 		       ? "NEW" + ci->first.substr(src_table.size())
 		       : ci->first);
   }
-  string sql = command + " INTO " + dest_table + "("
+  string sql = command + " INTO " + dest_table + " ("
     + incline_util::join(',', incline_util::filter("%2", def->columns()));
   if (extra_columns != NULL) {
     sql += ","
