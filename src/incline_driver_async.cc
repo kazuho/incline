@@ -16,7 +16,8 @@ vector<string>
 incline_driver_async::_build_insert_from_def(const incline_def* _def,
 					     const string& src_table,
 					     const string& command,
-					     const vector<string>& cond) const
+					     const vector<string>* cond)
+  const
 {
   const incline_def_async* def = dynamic_cast<const incline_def_async*>(_def);
   assert(def != NULL);
@@ -35,12 +36,15 @@ incline_driver_async::_build_insert_from_def(const incline_def* _def,
       r.push_back("END IF");
     } else {
       string direct_expr = do_build_direct_expr(de_col);
-      vector<string> cond_and_dexpr(cond);
+      vector<string> cond_and_dexpr;
+      if (cond != NULL) {
+	incline_util::push_back(cond_and_dexpr, *cond);
+      }
       cond_and_dexpr.push_back(direct_expr);
       incline_util::push_back(r,
 			      super::_build_insert_from_def(def, src_table,
 							    command,
-							    cond_and_dexpr));
+							    &cond_and_dexpr));
       cond_and_dexpr.pop_back();
       cond_and_dexpr.push_back("! (" +  direct_expr + ")");
       incline_util::push_back(r, 
@@ -48,7 +52,11 @@ incline_driver_async::_build_insert_from_def(const incline_def* _def,
 						 cond_and_dexpr));
     }
   } else {
-    incline_util::push_back(r, _build_enqueue_sql(def, src_table, "NEW", cond));
+    incline_util::push_back(r,
+			    _build_enqueue_sql(def, src_table, "NEW",
+					       cond != NULL
+					       ? *cond
+					       : vector<string>()));
   }
   return r;
 }

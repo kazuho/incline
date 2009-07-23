@@ -61,37 +61,11 @@ vector<string>
 incline_driver_standalone::_build_insert_from_def(const incline_def* def,
 						  const string& src_table,
 						  const string& command,
-						  const vector<string>& _cond)
+						  const vector<string>* _cond)
   const
 {
-  vector<string> cond(_cond);
-  vector<string> src_cols, dest_cols;
-  for (map<string, string>::const_iterator ci = def->columns().begin();
-       ci != def->columns().end();
-       ++ci) {
-    src_cols.push_back(incline_def::table_of_column(ci->first) == src_table
-		       ? "NEW" + ci->first.substr(src_table.size())
-		       : ci->first);
-    dest_cols.push_back(ci->second);
-  }
-  string sql = command + " INTO " + def->destination() + "(" +
-    incline_util::join(',', dest_cols) + ") SELECT " +
-    incline_util::join(',', src_cols);
-  if (def->source().size() > 1) {
-    vector<string> join_tables;
-    for (vector<string>::const_iterator si = def->source().begin();
-	 si != def->source().end();
-	 ++si) {
-      if (*si != src_table) {
-	join_tables.push_back(*si);
-      }
-    }
-    sql += " FROM " + incline_util::join(" INNER JOIN ", join_tables);
-    incline_util::push_back(cond, def->build_merge_cond(src_table, "NEW"));
-  }
-  if (! cond.empty()) {
-    sql += " WHERE " + incline_util::join(" AND ", cond);
-  }
+  string sql = _build_insert_from_def(def, def->destination(), src_table,
+				      command, _cond, NULL);
   return incline_util::vectorize(sql);
 }
 
@@ -162,4 +136,52 @@ incline_driver_standalone::_merge_cond_of(const incline_def* def,
 		   + src_col.substr(src_table.size() + 1));
   }
   return cond;
+}
+
+string
+incline_driver_standalone::_build_insert_from_def(const incline_def *def,
+						  const string& dest_table,
+						  const string& src_table,
+						  const string& command,
+						  const vector<string>* _cond,
+						  const map<string, string>* extra_columns)
+{
+  vector<string> cond, src_cols;
+  if (_cond != NULL) {
+    incline_util::push_back(cond, *_cond);
+  }
+  for (map<string, string>::const_iterator ci = def->columns().begin();
+       ci != def->columns().end();
+       ++ci) {
+    src_cols.push_back(incline_def::table_of_column(ci->first) == src_table
+		       ? "NEW" + ci->first.substr(src_table.size())
+		       : ci->first);
+  }
+  string sql = command + " INTO " + dest_table + "("
+    + incline_util::join(',', incline_util::filter("%2", def->columns()));
+  if (extra_columns != NULL) {
+    sql += ","
+      + incline_util::join(',', incline_util::filter("%1", *extra_columns));
+  }
+  sql += ") SELECT " + incline_util::join(',', src_cols);
+  if (extra_columns != NULL) {
+    sql += ","
+      + incline_util::join(',', incline_util::filter("%2", *extra_columns));
+  }
+  if (def->source().size() > 1) {
+    vector<string> join_tables;
+    for (vector<string>::const_iterator si = def->source().begin();
+	 si != def->source().end();
+	 ++si) {
+      if (*si != src_table) {
+	join_tables.push_back(*si);
+      }
+    }
+    sql += " FROM " + incline_util::join(" INNER JOIN ", join_tables);
+    incline_util::push_back(cond, def->build_merge_cond(src_table, "NEW"));
+  }
+  if (! cond.empty()) {
+    sql += " WHERE " + incline_util::join(" AND ", cond);
+  }
+  return sql;
 }
