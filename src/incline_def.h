@@ -17,8 +17,6 @@ protected:
   std::vector<std::pair<std::string, std::string> > merge_;
   // pk_columns + npk_columns
   std::map<std::string, std::string> columns_;
-  // reverse map of columns_
-  std::map<std::string, std::string> dest_columns_;
 public:
   virtual ~incline_def() {}
   // use default copy functions
@@ -29,7 +27,6 @@ public:
   const std::map<std::string, std::string>& npk_columns() const { return npk_columns_; }
   const std::vector<std::pair<std::string, std::string> >& merge() const { return merge_; }
   const std::map<std::string, std::string>& columns() const { return columns_; }
-  const std::map<std::string, std::string>& dest_columns() const { return dest_columns_; }
   bool is_master_of(const std::string& table) const;
   bool is_dependent_of(const std::string& table) const;
   std::string source_column_of(const std::string& dest_column, const char* ret_on_error = NULL) const;

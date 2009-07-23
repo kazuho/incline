@@ -166,32 +166,31 @@ string
 incline_def::source_column_of(const string& dest_column,
 			      const char* ret_on_error) const
 {
-  map<string, string>::const_iterator di = dest_columns_.find(dest_column);
-  if (di == dest_columns_.end()) {
-    if (ret_on_error) {
-      return ret_on_error;
+  map<string, string>::const_iterator ci;
+  for (map<string, string>::const_iterator ci = columns_.begin();
+       ci != columns_.end();
+       ++ci) {
+    if (ci->second == dest_column) {
+      return ci->first;
     }
-    assert(0);
   }
-  return di->second;
+  assert(ret_on_error != NULL);
+  return ret_on_error;
 }
 
 void
 incline_def::_rebuild_columns()
 {
   columns_.clear();
-  dest_columns_.clear();
   for (map<string, string>::const_iterator i = pk_columns_.begin();
        i != pk_columns_.end();
        ++i) {
     columns_[i->first] = i->second;
-    dest_columns_[i->second] = i->first;
   }
   for (map<string, string>::const_iterator i = npk_columns_.begin();
        i != npk_columns_.end();
        ++i) {
     columns_[i->first] = i->second;
-    dest_columns_[i->second] = i->first;
   }
 }
 

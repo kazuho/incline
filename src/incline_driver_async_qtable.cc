@@ -50,7 +50,7 @@ incline_driver_async_qtable::create_table_of(const incline_def* _def,
   const incline_def_async_qtable* def
     = dynamic_cast<const incline_def_async_qtable*>(_def);
   assert(def != NULL);
-  return _create_table_of(def, def->queue_table(), false, true, dbh);
+  return _create_table_of(def, def->queue_table(), if_not_exists, dbh);
 }
 
 string
@@ -68,61 +68,101 @@ string
 incline_driver_async_qtable::_create_table_of(const incline_def_async_qtable*
 					      def,
 					      const std::string& table_name,
-					      bool temporary,
 					      bool if_not_exists,
 					      tmd::conn_t& dbh) const
 {
-  vector<string> col_defs, pk_cols;
-  for (map<string, string>::const_iterator pi = def->pk_columns().begin();
-       pi != def->pk_columns().end();
-       ++pi) {
-    string table_name = incline_def::table_of_column(pi->first);
-    string column_name = pi->first.substr(table_name.size() + 1);
+  vector<string> col_defs;
+  for (map<string, string>::const_iterator ci = def->columns().begin();
+       ci != def->columns().end();
+       ++ci) {
     tmd::query_t res(dbh,
 		     "SELECT COLUMN_TYPE,CHARACTER_SET_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s' AND COLUMN_NAME='%s'",
 		     tmd::escape(dbh, mgr_->db_name()).c_str(),
-		     tmd::escape(dbh, table_name).c_str(),
-		     tmd::escape(dbh, column_name).c_str());
+		     tmd::escape(dbh, def->destination()).c_str(),
+		     tmd::escape(dbh, ci->second).c_str());
     if (res.fetch().eof()) {
       // TODO throw an exception instead
-      cerr << "failed to obtain column definition of: " << pi->first << endl;
+      cerr << "failed to obtain column definition of: " << ci->first << endl;
       exit(4);
     }
-    col_defs.push_back(pi->second + ' ' + res.field(0));
+    col_defs.push_back(ci->second + ' ' + res.field(0));
     if (res.field(1) != NULL) {
       col_defs.back() += string(" CHARSET ") + res.field(1);
     }
-    pk_cols.push_back(pi->second);
   }
-  return string("CREATE ") + (temporary ? "TEMPORARY " : "") + "TABLE "
-    + (if_not_exists ? "IF NOT EXISTS " : "") + table_name + " ("
+  return string("CREATE TABLE ") + (if_not_exists ? "IF NOT EXISTS " : "")
+    + table_name
+    + (" (_iq_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,"
+       " _iq_action CHAR(1) CHARACTER SET latin1,")
     + incline_util::join(',', col_defs)
-    + ",_iq_version INT UNSIGNED NOT NULL DEFAULT 0,PRIMARY KEY("
-    + incline_util::join(',', pk_cols) + ")) ENGINE="
-    + (temporary ? "MEMORY" : "InnoDB");
+    + ",PRIMARY KEY (_iq_id)) ENGINE InnoDB";
 }
 
 vector<string>
-incline_driver_async_qtable::do_build_enqueue_sql(const incline_def* _def,
-						  const map<string, string>&
-						  pk_columns,
-						  const vector<string>& tables,
-						  const vector<string>& cond)
+incline_driver_async_qtable::do_build_enqueue_insert_sql(const incline_def*
+							 _def,
+							 const string&
+							 src_table,
+							 const string& command,
+							 const vector<string>*
+							 cond)
   const
 {
   const incline_def_async_qtable* def
     = dynamic_cast<const incline_def_async_qtable*>(_def);
+  map<string, string> extra_columns;
+  extra_columns["_iq_action"] = "'R'";
+  string sql
+    = incline_driver_standalone::_build_insert_from_def(def, def->queue_table(),
+							src_table, command,
+							cond, &extra_columns);
+  return incline_util::vectorize(sql);
+}
+
+vector<string>
+incline_driver_async_qtable::do_build_enqueue_delete_sql(const incline_def*
+							 _def,
+							 const string&
+							 src_table,
+							 const vector<string>*
+							 _cond)
+  const
+{
+  const incline_def_async_qtable* def
+    = dynamic_cast<const incline_def_async_qtable*>(_def);
+  map<string, string> pk_columns;
+  for (map<string, string>::const_iterator pi = def->pk_columns().begin();
+       pi != def->pk_columns().end();
+       ++pi) {
+    string src = pi->first;
+    if (incline_def::table_of_column(pi->first) == src_table) {
+      src = "OLD" + src.substr(src_table.size());
+    }
+    pk_columns[src] = pi->second;
+  }
+  vector<string> tables;
+  for (vector<string>::const_iterator si = def->source().begin();
+       si != def->source().end();
+       ++si) {
+    if (*si != src_table && def->is_master_of(*si)) {
+      tables.push_back(*si);
+    }
+  }
+  vector<string> cond = def->build_merge_cond(src_table, "OLD", true);
+  if (_cond != NULL) {
+    incline_util::push_back(cond, *_cond);
+  }
   string sql = "INSERT INTO " + def->queue_table() + " ("
     + incline_util::join(',', incline_util::filter("%2", pk_columns))
-    + ") SELECT "
-    + incline_util::join(',', incline_util::filter("%1", pk_columns));
+    + ",_iq_action) SELECT "
+    + incline_util::join(',', incline_util::filter("%1", pk_columns))
+    + ",'D'";
   if (! tables.empty()) {
     sql += " FROM " + incline_util::join(" INNER JOIN ", tables);
   }
-  if (! cond.empty()) {
+  if (! cond.empty()){
     sql += " WHERE " + incline_util::join(" AND ", cond);
   }
-  sql += " ON DUPLICATE KEY UPDATE _iq_version=_iq_version+1";
   return incline_util::vectorize(sql);
 }
 
@@ -134,34 +174,6 @@ incline_driver_async_qtable::forwarder::forwarder(forwarder_mgr* mgr,
   : mgr_(mgr), def_(def), dbh_(dbh), poll_interval_(poll_interval),
     dest_pk_columns_(incline_util::filter("%2", def->pk_columns()))
 {
-  string temp_table = "_qt_" + def->queue_table();
-  // create temporary table
-  tmd::execute(*dbh_,
-	       mgr_->driver()->_create_table_of(def, temp_table, true, false,
-						*dbh_));
-  // build read queries
-  copy_to_temp_query_base_
-    = "INSERT INTO " + temp_table + " SELECT * FROM " + def->queue_table();
-  fetch_queue_query_
-    = "SELECT " + incline_util::join(',', dest_pk_columns_)
-    + ",_iq_version FROM " + temp_table;
-  {
-    vector<string> src_cols(incline_util::filter("%1", def->pk_columns()));
-    incline_util::push_back(src_cols,
-			    incline_util::filter("%1", def->npk_columns()));
-    vector<string> cond(def->build_merge_cond("", ""));
-    incline_util::push_back(cond, 
-			    incline_util::filter(("%1=" + temp_table + ".%2")
-						 .c_str(),
-						 def->pk_columns()));
-    fetch_src_query_
-      = "SELECT "
-      + incline_util::join(',', src_cols) + " FROM " + temp_table +
-      " INNER JOIN " + incline_util::join(" INNER JOIN ", def->source())
-      + " WHERE " + incline_util::join(" AND ", cond);
-  }
-  delete_queue_query_base_  = "DELETE FROM " + def->queue_table() + " WHERE ";
-  delete_temp_query_ = "DELETE FROM " + temp_table;
   // build write queries
   {
     vector<string> dest_cols(incline_util::filter("%2", def->pk_columns()));
@@ -183,79 +195,59 @@ void* incline_driver_async_qtable::forwarder::run()
 {
   while (1) {
     try {
-      vector<vector<string> > queue_rows, replace_rows, delete_pks;
-      size_t num_rows;
-      { // poll the queue table
+      vector<string> iq_ids;
+      vector<vector<string> > replace_rows, delete_pks;
+      { // fetch data
 	string extra_cond = do_get_extra_cond();
-	string query = copy_to_temp_query_base_;
+	string query = "SELECT _iq_id,_iq_action,"
+	  + incline_util::join(',',
+			       incline_util::filter("%2", def_->pk_columns()));
+	if (! def_->npk_columns().empty()) {
+	  query += ','
+	    + incline_util::join(',',
+				 incline_util::filter("%2",
+						      def_->npk_columns()));
+	}
+	query += " FROM " + def_->queue_table();
 	if (! extra_cond.empty()) {
+	  // TODO create and use index shard_key,_iq_id
 	  query += " WHERE " + extra_cond;
 	}
-	query += " LIMIT 50";
-	tmd::execute(*dbh_, query);
-	num_rows = tmd::affected_rows(*dbh_);
-	if (num_rows == 0) {
-	  sleep(poll_interval_);
-	  continue;
-	}
-      }
-      // fetch list of pks and iq_version
-      for (tmd::query_t res(*dbh_, fetch_queue_query_);
-	   ! res.fetch().eof();
-	   ) {
-	queue_rows.push_back(vector<string>());
-	for (size_t i = 0; i < res.num_fields(); ++i) {
-	  queue_rows.back().push_back(res.field(i));
-	}
-      }
-      // fetch rows to replace
-      for (tmd::query_t res(*dbh_, fetch_src_query_);
-	   ! res.fetch().eof();
-	   ) {
-	replace_rows.push_back(vector<string>());
-	for (size_t i = 0; i < res.num_fields(); ++i) {
-	  replace_rows.back().push_back(res.field(i));
-	}
-      }
-      // remove rows if we need to
-      if (replace_rows.size() != num_rows) {
-	vector<string> delete_cond;
-	for (vector<vector<string> >::const_iterator qi = queue_rows.begin();
-	     qi != queue_rows.end();
-	     ++qi) {
-	  for (vector<vector<string> >::const_iterator ri
-		 = replace_rows.begin();
-	       ri != replace_rows.end();
-	       ++ri) {
-	    for (size_t i = 0; i < qi->size() - 1; ++i) {
-	      if ((*ri)[i] != (*qi)[i]) {
-		goto ROW_NOT_EQUAL;
-	      }
+	query += " ORDER BY _iq_id LIMIT 50";
+	for (tmd::query_t res(*dbh_, query);
+	     ! res.fetch().eof();
+	     ) {
+	  iq_ids.push_back(res.field(0));
+	  // TODO only keep the last action within the current handled rows
+	  // for each pk (or would cause problem)
+	  switch (res.field(1)[0]) {
+	  case 'R': // replace
+	    replace_rows.push_back(vector<string>());
+	    for (size_t i = 0; i < def_->columns().size(); ++i) {
+	      replace_rows.back().push_back(res.field(i + 2));
 	    }
-	    goto NEXT_ROW;
-	  ROW_NOT_EQUAL:
-	    ;
+	    break;
+	  case 'D': // delete
+	    delete_pks.push_back(vector<string>());
+	    for (size_t i = 0; i < def_->pk_columns().size(); ++i) {
+	      delete_pks.back().push_back(res.field(i + 2));
+	    }
+	    break;
+	  default:
+	    assert(0);
 	  }
-	  delete_pks.push_back(vector<string>());
-	  for (size_t i = 0; i < qi->size() - 1; ++i) {
-	    delete_pks.back().push_back((*qi)[i]);
-	  }
-	NEXT_ROW:
-	  ;
 	}
+      }
+      // sleep and retry if no data
+      if (replace_rows.empty() && delete_pks.empty()) {
+	sleep(poll_interval_);
+	continue;
       }
       // update and remove from queue if successful
       if (do_update_rows(replace_rows, delete_pks)) {
-	vector<string> colnames(dest_pk_columns_), conds;
-	colnames.push_back("_iq_version");
-	for (vector<vector<string> >::const_iterator qi = queue_rows.begin();
-	     qi != queue_rows.end();
-	     ++qi) {
-	  conds.push_back("(" + _build_pk_cond(*dbh_, colnames, *qi) + ')');
-	}
 	tmd::execute(*dbh_,
-		     delete_queue_query_base_
-		     + incline_util::join(" OR ", conds));
+		     "DELETE FROM " + def_->queue_table() + " WHERE _iq_id IN ("
+		     + incline_util::join(',', iq_ids) + ')');
       }
     } catch (tmd::error_t& e) {
       switch (e.mysql_errno()) {
@@ -267,8 +259,6 @@ void* incline_driver_async_qtable::forwarder::run()
 	throw;
       }
     }
-    // clear the temp table
-    tmd::execute(*dbh_, delete_temp_query_);
   }
   
   return NULL;
@@ -372,7 +362,7 @@ incline_driver_async_qtable::forwarder_mgr::run()
 }
 
 void
-incline_driver_async_qtable::forwarder_mgr::log_sql(const std::string& sql)
+incline_driver_async_qtable::forwarder_mgr::log_sql(const string& sql)
 {
   if (log_fd_ != -1) {
     struct iovec vec[2];

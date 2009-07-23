@@ -21,11 +21,6 @@ public:
     tmd::conn_t* dbh_;
     int poll_interval_;
     std::vector<std::string> dest_pk_columns_;
-    std::string copy_to_temp_query_base_;
-    std::string fetch_queue_query_;
-    std::string fetch_src_query_;
-    std::string delete_queue_query_base_;
-    std::string delete_temp_query_;
     std::string replace_row_query_base_;
     std::string delete_row_query_base_;
   public:
@@ -85,8 +80,9 @@ public:
 			     log_fd);
   }
 protected:
-  std::string _create_table_of(const incline_def_async_qtable* def, const std::string& table_name, bool temporary, bool if_not_exists, tmd::conn_t& dbh) const;
-  virtual std::vector<std::string> do_build_enqueue_sql(const incline_def* def, const std::map<std::string, std::string>& pk_columns, const std::vector<std::string>& tables, const std::vector<std::string>& cond) const;
+  std::string _create_table_of(const incline_def_async_qtable* def, const std::string& table_name, bool if_not_exists, tmd::conn_t& dbh) const;
+  virtual std::vector<std::string> do_build_enqueue_insert_sql(const incline_def* def, const std::string& src_table, const std::string& command, const std::vector<std::string>* cond) const;
+  virtual std::vector<std::string> do_build_enqueue_delete_sql(const incline_def* def, const std::string& src_table, const std::vector<std::string>* cond) const;
 };
 
 #endif
