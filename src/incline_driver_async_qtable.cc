@@ -89,8 +89,7 @@ incline_driver_async_qtable::_create_table_of(const incline_def_async_qtable*
     if (res.field(1) != NULL) {
       col_defs.back() += string(" CHARSET ") + res.field(1);
     }
-    col_defs.back() += strcmp(res.field(0), "TIMESTAMP") == 0
-      ? " NULL DEFAULT NULL" : " DEFAULT NULL";
+    col_defs.back() += " NOT NULL";
   }
   return string("CREATE TABLE ") + (if_not_exists ? "IF NOT EXISTS " : "")
     + table_name
