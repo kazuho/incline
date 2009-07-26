@@ -175,6 +175,18 @@ incline_driver_async_qtable::forwarder::forwarder(forwarder_mgr* mgr,
   : mgr_(mgr), def_(def), dbh_(dbh), poll_interval_(poll_interval),
     dest_pk_columns_(incline_util::filter("%2", def->pk_columns()))
 {
+  fetch_query_base_ = "SELECT _iq_id,_iq_action,"
+    + incline_util::join(',',
+			 incline_util::filter("%2", def_->pk_columns()));
+  if (! def_->npk_columns().empty()) {
+    fetch_query_base_ += ','
+      + incline_util::join(',',
+			   incline_util::filter("%2",
+						def_->npk_columns()));
+  }
+  fetch_query_base_ += " FROM " + def_->queue_table() + ' ';
+  clear_queue_query_base_ = "DELETE FROM " + def_->queue_table()
+    + " WHERE _iq_id IN ";
   // build write queries
   {
     vector<string> dest_cols(incline_util::filter("%2", def->pk_columns()));
@@ -199,17 +211,8 @@ void* incline_driver_async_qtable::forwarder::run()
       vector<string> iq_ids;
       vector<vector<string> > replace_rows, delete_pks;
       { // fetch data
+	string query = fetch_query_base_;
 	string extra_cond = do_get_extra_cond();
-	string query = "SELECT _iq_id,_iq_action,"
-	  + incline_util::join(',',
-			       incline_util::filter("%2", def_->pk_columns()));
-	if (! def_->npk_columns().empty()) {
-	  query += ','
-	    + incline_util::join(',',
-				 incline_util::filter("%2",
-						      def_->npk_columns()));
-	}
-	query += " FROM " + def_->queue_table();
 	if (! extra_cond.empty()) {
 	  // TODO create and use index shard_key,_iq_id
 	  query += " WHERE " + extra_cond;
@@ -247,7 +250,7 @@ void* incline_driver_async_qtable::forwarder::run()
       // update and remove from queue if successful
       if (do_update_rows(replace_rows, delete_pks)) {
 	tmd::execute(*dbh_,
-		     "DELETE FROM " + def_->queue_table() + " WHERE _iq_id IN ("
+		     clear_queue_query_base_ + '('
 		     + incline_util::join(',', iq_ids) + ')');
       }
     } catch (tmd::error_t& e) {

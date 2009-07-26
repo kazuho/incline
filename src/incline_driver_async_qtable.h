@@ -21,6 +21,8 @@ public:
     tmd::conn_t* dbh_;
     int poll_interval_;
     std::vector<std::string> dest_pk_columns_;
+    std::string fetch_query_base_;
+    std::string clear_queue_query_base_;
     std::string replace_row_query_base_;
     std::string delete_row_query_base_;
   public:
