@@ -294,7 +294,7 @@ incline_driver_sharded::forwarder::forwarder(forwarder_mgr* mgr,
 }
 
 bool
-incline_driver_sharded::forwarder::do_update_rows(const vector<vector<string> >& replace_rows, const vector<vector<string> >& delete_rows)
+incline_driver_sharded::forwarder::do_update_rows(const vector<const vector<string>*>& replace_rows, const vector<const vector<string>*>& delete_rows)
 {
   map<fw_writer*, fw_writer_call_t*> calls;
   _setup_calls(calls, replace_rows, &fw_writer_call_t::replace_rows_);
@@ -336,20 +336,20 @@ incline_driver_sharded::forwarder::do_get_extra_cond()
 }
 
 void
-incline_driver_sharded::forwarder::_setup_calls(map<fw_writer*, fw_writer_call_t*>& calls, const vector<vector<string> >& rows, vector<const vector<string>*>* fw_writer_call_t::*target_rows)
+incline_driver_sharded::forwarder::_setup_calls(map<fw_writer*, fw_writer_call_t*>& calls, const vector<const vector<string>*>& rows, vector<const vector<string>*>* fw_writer_call_t::*target_rows)
 {
-  for (vector<vector<string> >::const_iterator ri = rows.begin();
+  for (vector<const vector<string>*>::const_iterator ri = rows.begin();
        ri != rows.end();
        ++ri) {
-    fw_writer* writer = mgr()->get_writer_for((*ri)[shard_col_index_]);
+    fw_writer* writer = mgr()->get_writer_for((**ri)[shard_col_index_]);
     map<fw_writer*, fw_writer_call_t*>::iterator ci = calls.lower_bound(writer);
     if (ci != calls.end() && ci->first == writer) {
-      (ci->second->*target_rows)->push_back(&*ri);
+      (ci->second->*target_rows)->push_back(*ri);
     } else {
       fw_writer_call_t* call
 	= new fw_writer_call_t(this, new vector<const vector<string>*>(),
 			       new vector<const vector<string>*>());
-      (call->*target_rows)->push_back(&*ri);
+      (call->*target_rows)->push_back(*ri);
       calls.insert(ci, make_pair(writer, call));
     }
   }

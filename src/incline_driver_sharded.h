@@ -55,10 +55,10 @@ public:
     const incline_def_sharded* def() const {
       return static_cast<const incline_def_sharded*>(super::def());
     }
-    virtual bool do_update_rows(const std::vector<std::vector<std::string> >& update_rows, const std::vector<std::vector<std::string> >& delete_rows);
+    virtual bool do_update_rows(const std::vector<const std::vector<std::string>*>& update_rows, const std::vector<const std::vector<std::string>*>& delete_rows);
     virtual std::string do_get_extra_cond();
   protected:
-    void _setup_calls(std::map<fw_writer*, fw_writer_call_t*>& calls, const std::vector<std::vector<std::string> >& rows, std::vector<const std::vector<std::string>*>* fw_writer_call_t::*target_rows);
+    void _setup_calls(std::map<fw_writer*, fw_writer_call_t*>& calls, const std::vector<const std::vector<std::string>*>& rows, std::vector<const std::vector<std::string>*>* fw_writer_call_t::*target_rows);
   };
   
   class forwarder_mgr : public incline_driver_async_qtable::forwarder_mgr {

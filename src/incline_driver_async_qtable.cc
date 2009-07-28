@@ -209,7 +209,7 @@ void* incline_driver_async_qtable::forwarder::run()
   while (1) {
     try {
       vector<string> iq_ids;
-      vector<vector<string> > replace_rows, delete_pks;
+      vector<pair<char, vector<string> > > rows;
       { // fetch data
 	string query = fetch_query_base_;
 	string extra_cond = do_get_extra_cond();
@@ -218,34 +218,58 @@ void* incline_driver_async_qtable::forwarder::run()
 	  query += " WHERE " + extra_cond;
 	}
 	query += " ORDER BY _iq_id LIMIT 50";
+	// load rows
 	for (tmd::query_t res(*dbh_, query);
 	     ! res.fetch().eof();
 	     ) {
 	  iq_ids.push_back(res.field(0));
-	  // TODO only keep the last action within the current handled rows
-	  // for each pk (or would cause problem)
-	  switch (res.field(1)[0]) {
-	  case 'R': // replace
-	    replace_rows.push_back(vector<string>());
-	    for (size_t i = 0; i < def_->columns().size(); ++i) {
-	      replace_rows.back().push_back(res.field(i + 2));
-	    }
-	    break;
-	  case 'D': // delete
-	    delete_pks.push_back(vector<string>());
-	    for (size_t i = 0; i < def_->pk_columns().size(); ++i) {
-	      delete_pks.back().push_back(res.field(i + 2));
-	    }
-	    break;
-	  default:
-	    assert(0);
+	  char action = res.field(1)[0];
+	  rows.push_back(make_pair(action, vector<string>()));
+	  for (size_t i = 0;
+	       i < (action == 'R'
+		    ? def_->columns().size() : def_->pk_columns().size());
+	       ++i) {
+	    rows.back().second.push_back(res.field(i + 2));
 	  }
 	}
       }
       // sleep and retry if no data
-      if (replace_rows.empty() && delete_pks.empty()) {
+      if (rows.empty()) {
 	sleep(poll_interval_);
 	continue;
+      }
+      vector<const vector<string>*> replace_rows, delete_pks;
+      // fill replace_rows and delete_rows
+      for (vector<pair<char, vector<string> > >::const_reverse_iterator ri
+	     = rows.rbegin();
+	   ri != rows.rend();
+	   ++ri) {
+	for (vector<pair<char, vector<string> > >::const_reverse_iterator ci
+	       = rows.rbegin();
+	     ci != ri;
+	     ++ci) {
+	  for (size_t i = 0; i < def_->pk_columns().size(); ++i) {
+	    if (ri->second[i] != ci->second[i]) {
+	      goto ROW_NOT_EQUAL;
+	    }
+	  }
+	  goto EQ_ROW_FOUND;
+	ROW_NOT_EQUAL:
+	  ;
+	}
+	// row with same pk not exists, register it
+	switch (ri->first) {
+	case 'R': // replace
+	  replace_rows.push_back(&ri->second);
+	  break;
+	case 'D': // delete
+	  delete_pks.push_back(&ri->second);
+	  break;
+	default:
+	  assert(0);
+	}
+      EQ_ROW_FOUND:
+	;
       }
       // update and remove from queue if successful
       if (do_update_rows(replace_rows, delete_pks)) {
@@ -269,13 +293,13 @@ void* incline_driver_async_qtable::forwarder::run()
 }
 
 bool
-incline_driver_async_qtable::forwarder::do_update_rows(const vector<vector<string> >& replace_rows, const vector<vector<string> >& delete_rows)
+incline_driver_async_qtable::forwarder::do_update_rows(const vector<const vector<string>*>& replace_rows, const vector<const vector<string>*>& delete_rows)
 {
   if (! replace_rows.empty()) {
-    this->replace_rows(*dbh_, to_ptr_rows(replace_rows));
+    this->replace_rows(*dbh_, replace_rows);
   }
   if (! delete_rows.empty()) {
-    this->delete_rows(*dbh_, to_ptr_rows(delete_rows));
+    this->delete_rows(*dbh_, delete_rows);
   }
   return true;
 }

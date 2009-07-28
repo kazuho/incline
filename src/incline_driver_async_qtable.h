@@ -33,13 +33,13 @@ public:
     const incline_def_async_qtable* def() const { return def_; }
     void* run();
   protected:
-    virtual bool do_update_rows(const std::vector<std::vector<std::string> >& replace_rows, const std::vector<std::vector<std::string> >& delete_rows);
+    virtual bool do_update_rows(const std::vector<const std::vector<std::string>*>& replace_rows, const std::vector<const std::vector<std::string>*>& delete_rows);
     virtual std::string do_get_extra_cond();
   protected:
     void replace_rows(tmd::conn_t& dbh, const std::vector<const std::vector<std::string>*>& rows) const;
     void delete_rows(tmd::conn_t& dbh, const std::vector<const std::vector<std::string>*>& rows) const;
   public:
-    static std::vector<const std::vector<std::string>*> to_ptr_rows(const std::vector<std::vector<std::string> >& input) {
+    static std::vector<const std::vector<std::string>*> ____to_ptr_rows(const std::vector<std::vector<std::string> >& input) {
       std::vector<const std::vector<std::string>*> r;
       for (std::vector<std::vector<std::string> >::const_iterator i
 	     = input.begin();
