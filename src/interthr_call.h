@@ -55,15 +55,16 @@ public:
   typedef std::vector<call_info_t*> slot_t;
 protected:
   struct info_t {
-    slot_t* active_slot_;
     pthread_cond_t to_worker_cond_;
+    slot_t* active_slot_;
     bool terminate_;
-    info_t() : active_slot_(new slot_t()), terminate_(false) {
+    info_t() : active_slot_(NULL), terminate_(false) {
       pthread_cond_init(&to_worker_cond_, NULL);
+      active_slot_ = new slot_t();
     }
     ~info_t() {
-      pthread_cond_destroy(&to_worker_cond_);
       delete active_slot_;
+      pthread_cond_destroy(&to_worker_cond_);
     }
   };
   cac_mutex_t<info_t> info_;
