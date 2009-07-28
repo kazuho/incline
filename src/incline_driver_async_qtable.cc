@@ -206,16 +206,27 @@ incline_driver_async_qtable::forwarder::~forwarder()
 
 void* incline_driver_async_qtable::forwarder::run()
 {
+  string extra_cond, last_id;
+  
   while (1) {
     try {
       vector<string> iq_ids;
       vector<pair<char, vector<string> > > rows;
+      { // update fetch state
+	string new_extra_cond = do_get_extra_cond();
+	if (extra_cond != new_extra_cond) {
+	  extra_cond = new_extra_cond;
+	  last_id.clear();
+	}
+      }
       { // fetch data
 	string query = fetch_query_base_;
-	string extra_cond = do_get_extra_cond();
 	if (! extra_cond.empty()) {
 	  // TODO create and use index shard_key,_iq_id
 	  query += " WHERE " + extra_cond;
+	  if (! last_id.empty()) {
+	    query += " AND _iq_id>" + last_id;
+	  }
 	}
 	query += " ORDER BY _iq_id LIMIT 50";
 	// load rows
@@ -237,6 +248,9 @@ void* incline_driver_async_qtable::forwarder::run()
       if (rows.empty()) {
 	sleep(poll_interval_);
 	continue;
+      }
+      if (! extra_cond.empty()) {
+	last_id = iq_ids.back();
       }
       vector<const vector<string>*> replace_rows, delete_pks;
       // fill replace_rows and delete_rows
