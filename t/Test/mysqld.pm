@@ -85,7 +85,8 @@ sub start {
         close $logfh;
         while (! -e $self->my_cnf->{'pid-file'}) {
             if (waitpid($pid, WNOHANG) > 0) {
-                die "failed to launch mysqld, see tmp/mysqld.log for details.";
+                die 'failed to launch mysqld, see ' . $self->base_dir
+                    . '/tmp/mysqld.log for details';
             }
             sleep 0.1;
         }
