@@ -89,9 +89,14 @@ public:
   template <typename Arg> void* run(Arg& arg) {
     slot_t* handle_slot = new slot_t();
     pthread_setspecific(handle_slot_key_, &handle_slot);
-    void *ret = static_cast<Handler*>(this)->do_handle_calls(arg);
-    delete handle_slot;
-    return ret;
+    try {
+      void *ret = static_cast<Handler*>(this)->do_handle_calls(arg);
+      delete handle_slot;
+      return ret;
+    } catch (...) {
+      delete handle_slot;
+      throw;
+    }
   }
   void call(Request& req) {
     pthread_cond_t ret_cond;

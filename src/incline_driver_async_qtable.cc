@@ -254,11 +254,12 @@ void* incline_driver_async_qtable::forwarder::run()
       }
       vector<const vector<string>*> replace_rows, delete_pks;
       // fill replace_rows and delete_rows
-      for (vector<pair<char, vector<string> > >::const_reverse_iterator ri
+      // compile error gcc 4.0.1 (mac) when using const_reverse_iter
+      for (vector<pair<char, vector<string> > >::reverse_iterator ri
 	     = rows.rbegin();
 	   ri != rows.rend();
 	   ++ri) {
-	for (vector<pair<char, vector<string> > >::const_reverse_iterator ci
+	for (vector<pair<char, vector<string> > >::reverse_iterator ci
 	       = rows.rbegin();
 	     ci != ri;
 	     ++ci) {

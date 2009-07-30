@@ -4,6 +4,7 @@
 extern "C" {
 #include <pthread.h>
 }
+#include <memory>
 
 template <typename T> struct start_thread_t {
   pthread_t thr_;
@@ -31,9 +32,8 @@ template <typename T, typename A> struct start_thread_with_arg_t {
     pthread_create(&thr_, NULL, _run, new run_arg_t(obj, arg));
   }
   static void* _run(void* _run_arg) {
-    run_arg_t* run_arg = reinterpret_cast<run_arg_t*>(_run_arg);
+    std::auto_ptr<run_arg_t> run_arg(reinterpret_cast<run_arg_t*>(_run_arg));
     void* ret = static_cast<T*>(run_arg->obj_)->run(run_arg->arg_);
-    delete run_arg;
     return ret;
   }
 };

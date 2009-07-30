@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <memory>
 #include <set>
 #include "incline_driver.h"
 #include "incline_mgr.h"
@@ -34,13 +35,12 @@ incline_mgr::parse(const picojson::value& src)
     if (! di->is<picojson::object>()) {
       return "definition should be an array of objects";
     }
-    incline_def* def = driver_->create_def();
+    auto_ptr<incline_def> def(driver_->create_def());
     string err = def->parse(*di);
     if (! err.empty()) {
-      delete def;
       return err;
     }
-    defs_.push_back(def);
+    defs_.push_back(def.release());
   }
   return string();
 }
