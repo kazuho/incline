@@ -6,15 +6,15 @@ use warnings;
 use Class::Accessor::Lite;
 use Cwd;
 use File::Remove;
+use POSIX qw(SIGTERM WNOHANG);
 use Time::HiRes qw(sleep);
 
 my %Defaults = (
-    auto_start       => 1,
+    auto_start       => 2,
     base_dir         => undef,
     my_cnf           => {},
     mysql_install_db => undef,
     mysqld           => undef,
-    skip_setup       => undef,
 );
 
 Class::Accessor::Lite->mk_accessors(keys %Defaults);
@@ -40,10 +40,13 @@ sub new {
         unless $self->mysql_install_db;
     $self->mysqld(_find_program(qw/mysqld bin libexec/))
         unless $self->mysqld;
-    $self->setup()
-        if ! $self->skip_setup;
-    $self->start
-        if $self->auto_start;
+    die 'mysqld is already running (' . $self->my_cnf->{'pid-file'} . ')'
+        if -e $self->my_cnf->{'pid-file'};
+    if ($self->auto_start) {
+        $self->setup
+            if $self->auto_start >= 2;
+        $self->start;
+    }
     $self;
 }
 
@@ -60,14 +63,30 @@ sub is_running {
 
 sub start {
     my $self = shift;
-    if (! $self->is_running) {
-        system(
-            $self->mysqld . " --defaults-file='" . $self->base_dir
-                . "/etc/my.cnf' > " . $self->base_dir
-                    . '/tmp/mysqld.log 2>&1 &',
-        ) == 0
-            or die "failed to launch mysqld:$?";
-        while (! $self->is_running) {
+    return
+        if $self->is_running;
+    open my $logfh, '>>', $self->base_dir . '/tmp/mysqld.log'
+        or die 'failed to create log file:' . $self->base_dir
+            . "/tmp/mysqld.log:$!";
+    my $pid = fork;
+    die "fork(2) failed:$!"
+        unless defined $pid;
+    if ($pid == 0) {
+        open STDOUT, '>&', $logfh
+            or die "dup(2) failed:$!";
+        open STDERR, '>&', $logfh
+            or die "dup(2) failed:$!";
+        exec(
+            $self->mysqld,
+            '--defaults-file=' . $self->base_dir . '/etc/my.cnf',
+        );
+        die "failed to launch mysqld:$?";
+    } else {
+        close $logfh;
+        while (! -e $self->my_cnf->{'pid-file'}) {
+            if (waitpid($pid, WNOHANG) > 0) {
+                die "failed to launch mysqld, see tmp/mysqld.log for details.";
+            }
             sleep 0.1;
         }
     }
@@ -81,7 +100,7 @@ sub stop {
         my $pid = <$fh>;
         chomp $pid;
         close $fh;
-        kill 15, $pid;
+        kill SIGTERM, $pid;
         while ($self->is_running) {
             sleep 0.1;
         }
@@ -106,12 +125,15 @@ sub setup {
     } sort keys %{$self->my_cnf};
     close $fh;
     # mysql_install_db
-    system(
+    open(
+        $fh,
+        '-|',
         $self->mysql_install_db . " --defaults-file='" . $self->base_dir
-            . "/etc/my.cnf' > " . $self->base_dir
-                . '/tmp/mysql_install_db.log 2>&1',
-    ) == 0
-        or die "mysql_install_db failed:$?";
+            . "/etc/my.cnf' 2>&1",
+    ) or die "failed to spawn mysql_install_db:$!";
+    my $output = do { undef $/; join "", join "\n", <$fh> };
+    close $fh
+        or die "mysql_install_db failed:\n$output\n";
 }
 
 sub _find_program {
