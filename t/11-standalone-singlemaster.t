@@ -2,10 +2,19 @@ use strict;
 use warnings;
 
 use DBI;
+use Test::mysqld;
+
 use Test::More tests => 16;
 
-my $dbh = DBI->connect('dbi:mysql:test;user=root')
-    or die DBI->errstr;
+my $mysqld = Test::mysqld->new(
+    my_cnf => {
+        'bind-address' => '127.0.0.1',
+        port           => 19010,
+    },
+);
+my $dbh = DBI->connect(
+    'dbi:mysql:test;user=root;mysql_socket=' . $mysqld->my_cnf->{socket},
+) or die DBI->errstr;
 
 # create tables
 ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")
@@ -24,7 +33,7 @@ ok(
 );
 
 # load rules
-system(qw(src/incline --source=example/singlemaster.json --database=test create-trigger)) == 0
+system(qw(src/incline --source=example/singlemaster.json --mysql-port=19010 --database=test create-trigger)) == 0
     or die "src/incline failed: $?";
 
 # run tests

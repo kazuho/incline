@@ -3,15 +3,24 @@ use warnings;
 
 use DBI;
 use Scope::Guard;
+use Test::mysqld;
+
 use Test::More tests => 19;
 
-my @incline_cmd = qw(src/incline --mode=queue-table --source=example/single.json --database=test);
+my $mysqld = Test::mysqld->new(
+    my_cnf => {
+        'bind-address' => '127.0.0.1',
+        port           => 19010,
+    },
+);
+my @incline_cmd = qw(src/incline --mode=queue-table --mysql-port=19010 --source=example/single.json --database=test);
 
 my $_dbh;
 
 sub dbh {
-    $_dbh ||= DBI->connect('dbi:mysql:test;user=root')
-        or die DBI->errstr;
+    $_dbh ||= DBI->connect(
+        'dbi:mysql:test;user=root;mysql_socket=' . $mysqld->my_cnf->{socket},
+    ) or die DBI->errstr;
     $_dbh;
 }
 

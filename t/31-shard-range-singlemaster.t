@@ -3,14 +3,24 @@ use warnings;
 
 use DBI;
 use Scope::Guard;
+use Test::mysqld;
+
 use Test::More tests => 47;
 
 my @incline_cmd = qw(src/incline --mode=shard --source=example/shard-singlemaster.json --shard-source=example/shard-range.json --database=test);
-my @db_nodes = qw/127.0.0.1:33060 127.0.0.1:33061/; # only use the first two
+my @db_nodes = qw/127.0.0.1:19010 127.0.0.1:19011/; # only use the first two
+my @mysqld;
 my @dbh;
 
 for my $db_node (@db_nodes) {
     my ($db_host, $db_port) = split /:/, $db_node, 2;
+    # start mysqld
+    push @mysqld, Test::mysqld->new(
+        my_cnf => {
+            'bind-address' => $db_host,
+            port           => $db_port,
+        },
+    );
     # create tables
     push @dbh, do {
         my $dbh = DBI->connect(

@@ -3,12 +3,21 @@ use warnings;
 
 use DBI;
 use Scope::Guard;
+use Test::mysqld;
+
 use Test::More tests => 21;
 
-my @incline_cmd = qw(src/incline --mode=queue-table --source=example/singlemaster.json --database=test);
+my $mysqld = Test::mysqld->new(
+    my_cnf => {
+        'bind-address' => '127.0.0.1',
+        port           => 19010,
+    },
+);
+my @incline_cmd = qw(src/incline --mode=queue-table --mysql-port=19010 --source=example/singlemaster.json --database=test);
 
-my $dbh = DBI->connect('dbi:mysql:test;user=root')
-    or die DBI->errstr;
+my $dbh = DBI->connect(
+    'dbi:mysql:test;user=root;mysql_socket=' . $mysqld->my_cnf->{socket},
+) or die DBI->errstr;
 
 # create tables
 ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")
