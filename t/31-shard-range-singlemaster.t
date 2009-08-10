@@ -5,11 +5,14 @@ use DBI;
 use Scope::Guard;
 use Test::mysqld;
 
-use Test::More tests => 47;
+use Test::More tests => 66;
 
 my @incline_cmd = qw(src/incline --mode=shard --source=example/shard-singlemaster.json --shard-source=example/shard-range.json --database=test);
-my @db_nodes = qw/127.0.0.1:19010 127.0.0.1:19011/; # only use the first two
+my @db_nodes = (
+    qw/127.0.0.1:19010 127.0.0.1:19011 127.0.0.1:19012/, # use the first three
+);
 my @mysqld;
+my @dbi_uri;
 my @dbh;
 
 for my $db_node (@db_nodes) {
@@ -21,11 +24,11 @@ for my $db_node (@db_nodes) {
             port           => $db_port,
         },
     );
+    push @dbi_uri, "dbi:mysql:test;user=root;host=$db_host;port=$db_port";
     # create tables
     push @dbh, do {
-        my $dbh = DBI->connect(
-            "dbi:mysql:test;user=root;host=$db_host;port=$db_port",
-        ) or die DBI->errstr;
+        my $dbh = DBI->connect($dbi_uri[-1])
+            or die DBI->errstr;
         $dbh;
     };
     ok($dbh[-1]->do("DROP TABLE IF EXISTS $_"), "drop $_")
@@ -155,37 +158,72 @@ is_deeply(
     }
     # tests
     my $waitf = sub {
+        my $target = shift;
         while (1) {
             my $rows = $dbh[0]->selectall_arrayref(
-                'SELECT COUNT(*) FROM _iq_incline_cal_by_user',
+                'SELECT COUNT(*) FROM _iq_incline_cal_by_user WHERE ?<=_user_id AND _user_id<?',
+                {},
+                1000 * $target,
+                1000 * ($target + 1),
             ) or die $dbh[0]->errstr;
             return if $rows->[0]->[0] == 0;
             sleep 1;
         }
     };
     my $cmpf = sub {
-        $waitf->();
+        my $target = shift;
+        $waitf->($target);
         return (
-            $dbh[0]->selectall_arrayref('SELECT user_id,cal_id,at FROM incline_cal INNER JOIN incline_cal_member ON incline_cal.id=incline_cal_member.cal_id ORDER BY user_id,cal_id'),
-            $dbh[1]->selectall_arrayref('SELECT _user_id,_cal_id,_at FROM incline_cal_by_user ORDER BY _user_id,_cal_id'),
+            $dbh[0]->selectall_arrayref(
+                'SELECT user_id,cal_id,at FROM incline_cal INNER JOIN incline_cal_member ON incline_cal.id=incline_cal_member.cal_id WHERE ?<=incline_cal_member.user_id AND incline_cal_member.user_id<? ORDER BY user_id,cal_id',
+                {},
+                1000 * $target,
+                1000 * ($target + 1),
+            ),
+            $dbh[$target]->selectall_arrayref('SELECT _user_id,_cal_id,_at FROM incline_cal_by_user ORDER BY _user_id,_cal_id'),
         );
     };
-    is_deeply($cmpf->(), 'post insertion check');
+    is_deeply($cmpf->(1), 'post insertion check');
     ok(
         $dbh[0]->do('INSERT INTO incline_cal_member (cal_id,user_id) VALUES (2,1002)'),
         'insert into cal_member (1002)',
     );
-    is_deeply($cmpf->(), 'post insertion check (1002)');
+    is_deeply($cmpf->(1), 'post insertion check (1002)');
     ok(
         $dbh[0]->do('UPDATE incline_cal SET at=at+1 WHERE id=2'),
         'update cal.at',
     );
-    is_deeply($cmpf->(), 'post update check');
+    is_deeply($cmpf->(1), 'post update check');
     ok(
         $dbh[0]->do('DELETE FROM incline_cal_member WHERE cal_id=2 AND user_id=1000'),
         'delete from cal_member',
     );
-    is_deeply($cmpf->(), 'post delete check');
+    is_deeply($cmpf->(1), 'post delete check');
+    # partially down test
+    undef $dbh[2];
+    $mysqld[2]->stop();
+    ok(
+        $dbh[0]->do(
+            'INSERT INTO incline_cal (id,at,title) VALUES (3,99,"hola")',
+        ),
+        'insert into cal (partially down)',
+    );
+    ok(
+        $dbh[0]->do(
+            'INSERT INTO incline_cal_member (cal_id,user_id) VALUES (3,1000),(3,2000)'),
+        'insert into cal_member (partially down)',
+    );
+    is_deeply($cmpf->(1), 'post insert check (partially down)');
+    ok(
+        $dbh[0]->do(
+            'INSERT INTO incline_cal_member (cal_id,user_id) VALUES (3,1001)',
+        ),
+        'insert into cal_member 2 (partially down)',
+    );
+    $mysqld[2]->start();
+    $dbh[2] = DBI->connect($dbi_uri[2])
+        or die $DBI::errstr;
+    is_deeply($cmpf->(2), 'recovery test');
 }
 sleep 1;
 
