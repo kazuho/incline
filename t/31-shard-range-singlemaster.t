@@ -15,6 +15,8 @@ my @mysqld;
 my @dbi_uri;
 my @dbh;
 
+diag("please ignore diag messages unless any test fails");
+
 for my $db_node (@db_nodes) {
     my ($db_host, $db_port) = split /:/, $db_node, 2;
     # start mysqld
