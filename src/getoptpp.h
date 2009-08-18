@@ -5,7 +5,9 @@ extern "C" {
 #include <getopt.h>
 }
 #include <cassert>
+#include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -13,6 +15,9 @@ namespace getoptpp {
   
   class opt_base;
   typedef std::vector<opt_base*> opt_list_t;
+  enum {
+    opt_template_length = 30
+  };
   
   template <typename T> struct _opt_list {
     static opt_list_t* opts;
@@ -68,12 +73,19 @@ namespace getoptpp {
       return true;
     }
     void help(std::ostream& os) {
-      os << "--" << o_.name;
+      std::string s("  --");
+      s += o_.name;
       switch (o_.has_arg) {
-      case required_argument: os << "=s"; break;
+      case required_argument: s += '='; break;
       default: break;
       }
-      os << "  " << desc_;
+      if (s.size() < opt_template_length) {
+	s.insert(s.end(), opt_template_length - s.size(), ' ');
+	os << s << "  " << desc_;
+      } else {
+	os << s << std::endl << std::string(opt_template_length + 2, ' ')
+	   << desc_;
+      }
     }
   };
   
@@ -138,6 +150,7 @@ namespace getoptpp {
 	std::cout << std::endl;
       }
       std::cout << std::endl;
+      exit(0);
     }
   };
   
