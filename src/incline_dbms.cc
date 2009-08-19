@@ -1,3 +1,4 @@
+#include <cstdarg>
 #include <sstream>
 #include "incline_mysql.h"
 #include "incline_pgsql.h"

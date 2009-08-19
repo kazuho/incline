@@ -7,7 +7,7 @@ use Test::mysqld;
 
 use Test::More tests => 66;
 
-my @incline_cmd = qw(src/incline --mode=shard --source=example/shard-singlemaster.json --shard-source=example/shard-range.json --database=test);
+my @incline_cmd = qw(src/incline --mode=shard --source=example/shard-singlemaster.json --shard-source=example/shard-range.json --rdbms=mysql --database=test);
 my @db_nodes = (
     qw/127.0.0.1:19010 127.0.0.1:19011 127.0.0.1:19012/, # use the first three
 );
@@ -51,8 +51,8 @@ for my $db_node (@db_nodes) {
     ok(
         system(
             @incline_cmd,
-            "--mysql-host=$db_host",
-            "--mysql-port=$db_port",
+            "--host=$db_host",
+            "--port=$db_port",
             'drop-queue',
         ) == 0,
         'drop queue if exists',
@@ -60,8 +60,8 @@ for my $db_node (@db_nodes) {
     ok(
         system(
             @incline_cmd,
-            "--mysql-host=$db_host",
-            "--mysql-port=$db_port",
+            "--host=$db_host",
+            "--port=$db_port",
             'create-queue',
         ) == 0,
         'create queue',
@@ -69,8 +69,8 @@ for my $db_node (@db_nodes) {
     ok(
         system(
             @incline_cmd,
-            "--mysql-host=$db_host",
-            "--mysql-port=$db_port",
+            "--host=$db_host",
+            "--port=$db_port",
             'create-trigger',
         ) == 0,
         'create trigger',
@@ -152,8 +152,8 @@ is_deeply(
         my ($db_host, $db_port) = split /:/, $db_nodes[0], 2;
         exec(
             @incline_cmd,
-            "--mysql-host=$db_host",
-            "--mysql-port=$db_port",
+            "--host=$db_host",
+            "--port=$db_port",
             'forward',
         );
         die "failed to exec forwarder: $?";
@@ -235,8 +235,8 @@ for my $db_node (@db_nodes) {
     ok(
         system(
             @incline_cmd,
-            "--mysql-host=$db_host",
-            "--mysql-port=$db_port",
+            "--host=$db_host",
+            "--port=$db_port",
             'drop-trigger',
         ) == 0,
         'drop trigger',
@@ -244,8 +244,8 @@ for my $db_node (@db_nodes) {
     ok(
         system(
             @incline_cmd,
-            "--mysql-host=$db_host",
-            "--mysql-port=$db_port",
+            "--host=$db_host",
+            "--port=$db_port",
             'drop-queue',
         ) == 0,
         'drop queue',

@@ -33,7 +33,7 @@ ok(
 );
 
 # load rules
-system(qw(src/incline --source=example/singlemaster.json --mysql-port=19010 --database=test create-trigger)) == 0
+system(qw(src/incline --source=example/singlemaster.json --rdbms=mysql --port=19010 --database=test create-trigger)) == 0
     or die "src/incline failed: $?";
 
 # run tests

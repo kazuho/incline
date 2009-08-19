@@ -13,7 +13,7 @@ my $mysqld = Test::mysqld->new(
         port           => 19010,
     },
 );
-my @incline_cmd = qw(src/incline --mode=queue-table --mysql-port=19010 --source=example/singlemaster.json --database=test);
+my @incline_cmd = qw(src/incline --mode=queue-table --rdbms=mysql --port=19010 --source=example/singlemaster.json --database=test);
 
 my $dbh = DBI->connect(
     'dbi:mysql:test;user=root;mysql_socket=' . $mysqld->my_cnf->{socket},

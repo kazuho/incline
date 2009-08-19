@@ -13,7 +13,7 @@ my $mysqld = Test::mysqld->new(
         port           => 19010,
     },
 );
-my @incline_cmd = qw(src/incline --mode=queue-table --mysql-port=19010 --source=example/single.json --database=test);
+my @incline_cmd = qw(src/incline --mode=queue-table --rdbms=mysql --port=19010 --source=example/single.json --database=test);
 
 my $_dbh;
 

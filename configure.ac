@@ -14,27 +14,65 @@ AC_SUBST(LIBTOOL)
 
 AC_ARG_WITH(mysql,
 	[  --with-mysql=dir        mysql directory [[automatic]]],
-	[
-MYSQL_DIR="$withval"
-], [
-if test -d /usr/local/mysql
+	[MYSQL_DIR="$withval"])
+if test "$MYSQL_DIR" = "yes" -o ! -n "$MYSQL_DIR"
 then
-	MYSQL_DIR=/usr/local/mysql
+	AC_CHECK_LIB(mysqlclient_r, mysql_errno, [FOUND_MYSQL=1])
+	if test "$FOUND_MYSQL"
+	then
+		LDFLAGS="$LDFLAGS -lmysqlclient_r"
+		AC_DEFINE([WITH_MYSQL],1,[create mysql driver])
+		MYSQL_DIR="no"
+	elif test -d /usr/local/mysql
+	then
+	     MYSQL_DIR=/usr/local/mysql
+	elif test "$MYSQL_DIR" = "yes"
+	then
+	     AC_MSG_ERROR([could not find mysql])
+	fi
 fi
-])
-if test -n "$MYSQL_DIR"
+if test "$MYSQL_DIR" != "no"
 then
 	if test ! -d "$MYSQL_DIR"
 	then
-		AC_MSG_ERROR(["failed to locate mysql"])
+		AC_MSG_ERROR([could not find mysql at given location])
 	fi
-	CFLAGS="$CFLAGS -I$MYSQL_DIR/include/mysql -I$MYSQL_DIR/include"
-	CXXFLAGS="$CXXFLAGS -I$MYSQL_DIR/include/mysql -I$MYSQL_DIR/include"
-	LDFLAGS="$LDFLAGS -L$MYSQL_DIR/lib/mysql -L$MYSQL_DIR/lib"
+	CPPFLAGS="$CPPFLAGS -I$MYSQL_DIR/include/mysql -I$MYSQL_DIR/include"
+	LDFLAGS="$LDFLAGS -L$MYSQL_DIR/lib/mysql -L$MYSQL_DIR/lib -lmysqlclient_r"
+	AC_DEFINE([WITH_MYSQL],1,[create mysql driver])
+fi
+
+AC_ARG_WITH(pgsql,
+	[  --with-pgsql=dir        postgresql directory [[automatic]]],
+	[PGSQL_DIR="$withval"])
+if test "$PGSQL_DIR" = "yes" -o ! -n "$PGSQL"
+then
+	AC_CHECK_LIB(pq, PQerrorMessage, [FOUND_PGSQL=1])
+	if test "$FOUND_PGSQL"
+	then
+		LDFLAGS="$LDFLAGS -lpq"
+		AC_DEFINE([WITH_PGSQL],1,[create pgsql driver])
+		PGSQL_DIR="no"
+	elif test -d /usr/local/pgsql
+	then
+	     PGSQL_DIR=/usr/local/pgsql
+	elif test "$PGSQL_DIR" = "yes"
+	then
+	     AC_MSG_ERROR([could not find pgsql])
+	fi
+fi
+if test "$PGSQL_DIR" != "no"
+then
+	if test ! -d "$PGSQL_DIR"
+	then
+		AC_MSG_ERROR([could not find pgsql at given location])
+	fi
+	CPPFLAGS="$CPPFLAGS -I$PGSQL_DIR/include"
+	LDFLAGS="$LDFLAGS -L$PGSQL_DIR/lib -lpq"
+	AC_DEFINE([WITH_PGSQL],1,[create pgsql driver])
 fi
 
 CFLAGS="$CFLAGS -Wall -g -O"
 CXXFLAGS="$CXXFLAGS -Wall -g -O"
-LDFLAGS="$LDFLAGS -lmysqlclient_r"
 
 AC_OUTPUT(Makefile src/Makefile)
