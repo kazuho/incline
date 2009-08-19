@@ -4,7 +4,6 @@ extern "C" {
 #include <fstream>
 #include <iostream>
 #include <iterator>
-#include <sstream>
 #include "getoptpp.h"
 #include "start_thread.h"
 #include "incline.h"
@@ -13,8 +12,6 @@ using namespace std;
 
 static getoptpp::opt_str opt_mode('m', "mode", false, "mode", "standalone");
 static getoptpp::opt_str opt_source('s', "source", true, "definition file");
-static getoptpp::opt_str opt_rdbms('r', "rdbms", false, "rdbms name", "mysql");
-static getoptpp::opt_str opt_database('d', "database", true, "database name");
 
 static getoptpp::opt_str opt_forwarder_log_file(0, "forwarder-log-file", false,
 						"", "");
@@ -22,23 +19,14 @@ static getoptpp::opt_str opt_forwarder_log_file(0, "forwarder-log-file", false,
 static getoptpp::opt_str opt_shard_source('S', "shard-source", false,
 					  "shard definition file", "");
 
-static getoptpp::opt_str opt_mysql_host(0, "mysql-host", false, "mysql host",
-					"127.0.0.1");
-static getoptpp::opt_str opt_mysql_user(0, "mysql-user", false,
-					"mysql user", "root");
-static getoptpp::opt_str opt_mysql_password(0, "mysql-password", false,
-					    "mysql password", "");
-static getoptpp::opt_int opt_mysql_port(0, "mysql-port", false, "mysql port",
-					3306);
-
 static incline_mgr* mgr = NULL;
 
-static void run_all_stmt(tmd::conn_t& dbh, const vector<string>& stmt)
+static void run_all_stmt(incline_dbms* dbh, const vector<string>& stmt)
 {
   for (vector<string>::const_iterator si = stmt.begin();
        si != stmt.end();
        ++si) {
-    tmd::execute(dbh, *si);
+    dbh->execute(*si);
   }
 }
 
@@ -62,12 +50,6 @@ inline incline_driver_sharded* shard_driver()
     exit(1);
   }
   return static_cast<incline_driver_sharded*>(mgr->driver());
-}
-
-static tmd::conn_t* connect_db(const char* host, unsigned short port)
-{
-  return new tmd::conn_t(host, *opt_mysql_user, *opt_mysql_password,
-			 *opt_database, port);
 }
 
 int
@@ -101,7 +83,7 @@ main(int argc, char** argv)
       cerr << "unknown mode:" << *opt_mode << endl;
       exit(1);
     }
-    mgr = new incline_mgr(driver, *opt_database);
+    mgr = new incline_mgr(driver);
   }
   
   { // parse source
@@ -127,6 +109,14 @@ main(int argc, char** argv)
       exit(3);
     }
   }
+  
+  // connect to database
+  if (! incline_dbms::setup_factory()) {
+    cerr << "rdbms:" << *incline_dbms::opt_rdbms_ << " is not supported"
+	 << endl;
+    exit(1);
+  }
+  auto_ptr<incline_dbms> dbh(incline_dbms::factory_->create());
   
   // parse sharded_source
   if (*opt_mode == "shard") {
@@ -156,9 +146,8 @@ main(int argc, char** argv)
       exit(3);
     }
     {
-      stringstream ss;
-      ss << *opt_mysql_host << ':' << *opt_mysql_port;
-      err = shard_driver()->set_hostport(ss.str());
+      err
+	= shard_driver()->set_hostport(incline_dbms::factory_->get_hostport());
       if (! err.empty()) {
 	cerr << err << endl;
 	exit(3);
@@ -166,21 +155,13 @@ main(int argc, char** argv)
     }
   }
   
-  // connect to database
-  if (*opt_rdbms != "mysql") {
-    cerr << "only mysql is supported" << endl;
-    exit(1);
-  }
-  tmd::conn_t dbh(*opt_mysql_host, *opt_mysql_user, *opt_mysql_password,
-		  *opt_database, *opt_mysql_port);
-  
   // handle the command
   if (command == "create-trigger") {
     vector<string> stmt(mgr->create_trigger_all(false));
-    run_all_stmt(dbh, stmt);
+    run_all_stmt(dbh.get(), stmt);
   } else if (command == "drop-trigger") {
     vector<string> stmt(mgr->drop_trigger_all(true));
-    run_all_stmt(dbh, stmt);
+    run_all_stmt(dbh.get(), stmt);
   } else if (command == "print-trigger") {
     vector<string> stmt(mgr->create_trigger_all(false));
     picojson::value a(picojson::array_type, false);
@@ -188,11 +169,11 @@ main(int argc, char** argv)
     a.serialize(ostream_iterator<char>(cout));
     cout << endl;
   } else if (command == "create-queue") {
-    vector<string> stmt(aq_driver()->create_table_all(false, dbh));
-    run_all_stmt(dbh, stmt);
+    vector<string> stmt(aq_driver()->create_table_all(false, dbh.get()));
+    run_all_stmt(dbh.get(), stmt);
   } else if (command == "drop-queue") {
     vector<string> stmt(aq_driver()->drop_table_all(true));
-    run_all_stmt(dbh, stmt);
+    run_all_stmt(dbh.get(), stmt);
   } else if (command == "forward") {
     int log_fd = -1;
     if (*opt_forwarder_log_file == "-") {
@@ -207,8 +188,7 @@ main(int argc, char** argv)
       }
     }
     incline_driver_async_qtable::forwarder_mgr* mgr
-      = aq_driver()->create_forwarder_mgr(connect_db, *opt_mysql_host,
-					  *opt_mysql_port, 1, log_fd);
+      = aq_driver()->create_forwarder_mgr(1, log_fd);
     mgr->run();
     delete mgr;
   } else {

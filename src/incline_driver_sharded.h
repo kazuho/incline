@@ -47,7 +47,7 @@ public:
   protected:
     size_t shard_col_index_; // used for replace and delete, they are the same
   public:
-    forwarder(forwarder_mgr* mgr, const incline_def_sharded* def, tmd::conn_t* dbh, int poll_interval);
+    forwarder(forwarder_mgr* mgr, const incline_def_sharded* def, incline_dbms* dbh, int poll_interval);
     const forwarder_mgr* mgr() const {
       return static_cast<const forwarder_mgr*>(super::mgr());
     }
@@ -67,7 +67,7 @@ public:
   protected:
     std::map<std::string, fw_writer*> writers_;
   public:
-    forwarder_mgr(incline_driver_sharded* driver, tmd::conn_t* (*connect)(const char* host, unsigned short port), const std::string& src_host, unsigned short src_port, int poll_interval, int log_fd) : super(driver, connect, src_host, src_port, poll_interval, log_fd) {}
+    forwarder_mgr(incline_driver_sharded* driver, int poll_interval, int log_fd) : super(driver, poll_interval, log_fd) {}
     const incline_driver_sharded* driver() const {
       return static_cast<const incline_driver_sharded*>(super::driver());
     }
@@ -80,7 +80,7 @@ public:
       return wi->second;
     }
     virtual void* run();
-    tmd::conn_t* connect(const std::string& hostport);
+    incline_dbms* connect(const std::string& hostport);
   protected:
     virtual forwarder* do_create_forwarder(const incline_def_async_qtable* def);
   };
@@ -94,9 +94,8 @@ public:
     delete rule_;
   }
   virtual incline_def* create_def() const;
-  virtual forwarder_mgr* create_forwarder_mgr(tmd::conn_t* (*connect)(const char*, unsigned short), const std::string& src_host, unsigned short src_port, int poll_interval, int log_fd) {
-    return new forwarder_mgr(this, connect, src_host, src_port, poll_interval,
-			     log_fd);
+  virtual forwarder_mgr* create_forwarder_mgr(int poll_interval, int log_fd) {
+    return new forwarder_mgr(this, poll_interval, log_fd);
   }
   std::string parse_shard_def(const picojson::value& def);
   const rule* rule() const { return rule_; }

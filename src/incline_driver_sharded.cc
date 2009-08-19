@@ -1,7 +1,7 @@
 #include <cassert>
 #include <set>
 #include "start_thread.h"
-#include "tmd.h"
+#include "incline_dbms.h"
 #include "incline_def_sharded.h"
 #include "incline_driver_sharded.h"
 #include "incline_mgr.h"
@@ -214,7 +214,7 @@ incline_driver_sharded::do_build_direct_expr(const string& column_expr) const
 void*
 incline_driver_sharded::fw_writer::do_handle_calls(int)
 {
-  tmd::conn_t* dbh = NULL;
+  incline_dbms* dbh = NULL;
   
   while (! terminate_requested()) {
     // get data to handle
@@ -241,26 +241,26 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
     }
     try {
       if (use_transaction) {
-	tmd::execute(*dbh, "BEGIN");
+	dbh->execute("BEGIN");
       }
       for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
 	fw_writer_call_t* req = (*si)->request();
 	if (! req->replace_rows_->empty()) {
-	  req->forwarder_->replace_rows(*dbh, *req->replace_rows_);
+	  req->forwarder_->replace_rows(dbh, *req->replace_rows_);
 	}
 	if (! req->delete_rows_->empty()) {
-	  req->forwarder_->delete_rows(*dbh, *req->delete_rows_);
+	  req->forwarder_->delete_rows(dbh, *req->delete_rows_);
 	}
       }
       if (use_transaction) {
-	tmd::execute(*dbh, "COMMIT");
+	dbh->execute("COMMIT");
       }
       for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
 	fw_writer_call_t* req = (*si)->request();
 	req->success_ = true;
       }
       retry_at_ = 0; // reset so that other threads will reconnect immediately
-    } catch (tmd::error_t err) {
+    } catch (domain_error& err) {
       // on error, log error, disconnect
       cerr << err.what() << endl;
       delete dbh;
@@ -275,7 +275,7 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
 
 incline_driver_sharded::forwarder::forwarder(forwarder_mgr* mgr,
 					     const incline_def_sharded* def,
-					     tmd::conn_t* dbh,
+					     incline_dbms* dbh,
 					     int poll_interval)
   : super(mgr, def, dbh, poll_interval)
 {
@@ -383,14 +383,15 @@ incline_driver_sharded::forwarder_mgr::run()
   return NULL;
 }
 
-tmd::conn_t*
+incline_dbms*
 incline_driver_sharded::forwarder_mgr::connect(const string& hostport)
 {
   unsigned short port = 0;
   string::size_type colon_at = hostport.find(':');
   assert(colon_at != string::npos);
   sscanf(hostport.c_str() + colon_at + 1, "%hu", &port);
-  return (*connect_)(hostport.substr(0, colon_at).c_str(), port);
+  return incline_dbms::factory_->create(hostport.substr(0, colon_at).c_str(),
+					port);
 }
 
 incline_driver_sharded::forwarder*
@@ -399,7 +400,7 @@ incline_driver_sharded::forwarder_mgr::do_create_forwarder(const incline_def_asy
   const incline_def_sharded* def
     = dynamic_cast<const incline_def_sharded*>(_def);
   assert(def != NULL);
-  tmd::conn_t* dbh = (*connect_)(src_host_.c_str(), src_port_);
+  incline_dbms* dbh = incline_dbms::factory_->create();
   assert(dbh != NULL);
   return new forwarder(this, def, dbh, poll_interval_);
 }

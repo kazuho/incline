@@ -8,14 +8,12 @@ class incline_driver;
 
 class incline_mgr {
 protected:
-  std::string db_name_;
   std::vector<incline_def*> defs_;
   incline_driver* driver_;
   std::string trigger_time_;
 public:
-  incline_mgr(incline_driver* d, const std::string& db_name);
+  incline_mgr(incline_driver* d);
   virtual ~incline_mgr();
-  std::string db_name() const { return db_name_; }
   const std::vector<incline_def*>& defs() const { return defs_; }
   incline_driver* driver() { return driver_; }
   std::string trigger_time() const { return trigger_time_; }
