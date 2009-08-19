@@ -10,8 +10,9 @@ use Test::More;
 my $instance = InclineTest->create_any(
     mysqld => {
         my_cnf => {
-            'bind-address' => '127.0.0.1',
-            port           => 19010,
+            'bind-address'           => '127.0.0.1',
+            port                     => 19010,
+            'default-storage-engine' => 'INNODB',
         },
     },
     postgresql => {
@@ -29,17 +30,25 @@ my $dbh = InclineTest->connect(
 ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")
     for qw/incline_dest incline_src/;
 ok(
-    $dbh->do('CREATE TABLE incline_dest (_id INT UNSIGNED NOT NULL,_message VARCHAR(255) NOT NULL,PRIMARY KEY(_id)) ENGINE=InnoDB'),
+    $dbh->do('CREATE TABLE incline_dest (_id INT NOT NULL,_message VARCHAR(255) NOT NULL,PRIMARY KEY(_id))'),
     'create dest table',
 );
 ok(
-    $dbh->do('CREATE TABLE incline_src (id INT UNSIGNED NOT NULL AUTO_INCREMENT,message VARCHAR(255) NOT NULL,PRIMARY KEY (id)) ENGINE=InnoDB'),
+    $dbh->do(
+        InclineTest->adjust_ddl(
+            'CREATE TABLE incline_src (id SERIAL,message VARCHAR(255) NOT NULL,PRIMARY KEY (id))',
+        ),
+    ),
     'create dest table',
 );
 
 # load rules
-system(qw(src/incline --source=example/single.json --mysql-port=19010 --database=test create-trigger)) == 0
-    or die "src/incline failed: $?";
+system(
+    qw(src/incline),
+    "--rdbms", $ENV{TEST_DBMS},
+    qw(--source=example/single.json --port=19010 --database=test
+       create-trigger),
+) == 0 or die "src/incline failed: $?";
 
 # run tests
 my $cmpf = sub {

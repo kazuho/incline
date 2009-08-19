@@ -10,7 +10,7 @@ public:
   struct factory : public incline_dbms::factory {
     virtual ~factory() {}
     virtual incline_pgsql* create(const std::string& host, unsigned short port);
-    virtual std::string get_hostport() const;
+    virtual unsigned short default_port() const { return 5432; }
   };
 protected:
   PGconn* dbh_;
@@ -22,12 +22,6 @@ public:
 private:
   incline_pgsql(const std::string& host, unsigned short port);
   PGconn* _dbh();
-public:
-  static getoptpp::opt_str opt_pgsql_host_;
-  static getoptpp::opt_str opt_pgsql_user_;
-  static getoptpp::opt_str opt_pgsql_password_;
-  static getoptpp::opt_int opt_pgsql_port_;
-  static incline_pgsql* create(const std::string& host, unsigned short port);
 };
 
 #endif

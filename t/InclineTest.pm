@@ -20,7 +20,7 @@ sub create_any {
         my $dbh = DBI->connect(
             'DBI:Pg:dbname=template1;user=postgres;port=' . $instance->port,
         ) or die $DBI::errstr;
-        $dbh->do('CREATE ROLE SUPERUSER')
+        $dbh->do('CREATE ROLE root SUPERUSER LOGIN')
             or die $dbh->errstr;
         $dbh->do('CREATE DATABASE test')
             or die $dbh->errstr;
@@ -40,6 +40,14 @@ sub connect {
         or die "unexpected template: $uri";
     my $dbh = DBI->connect($uri)
         or die $DBI::errstr;
+}
+
+sub adjust_ddl {
+    my ($klass, $ddl) = @_;
+    if ($ENV{TEST_DBMS} eq 'mysqld') {
+        $ddl =~ s/(\s+)SERIAL(\W?)/$1INT UNSIGNED NOT NULL AUTO_INCREMENT$2/ig;
+    }
+    $ddl;
 }
 
 1;

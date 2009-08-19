@@ -1,33 +1,15 @@
-#include <sstream>
 #include "incline_mysql.h"
 #include "tmd.h"
 
 using namespace std;
 
-getoptpp::opt_str incline_mysql::opt_mysql_host_(0, "mysql-host", false,
-						 "mysql host", "127.0.0.1");
-getoptpp::opt_str incline_mysql::opt_mysql_user_(0, "mysql-user", false,
-						 "mysql user", "root");
-getoptpp::opt_str incline_mysql::opt_mysql_password_(0, "mysql-password", false,
-						     "mysql password", "");
-getoptpp::opt_int incline_mysql::opt_mysql_port_(0, "mysql-port", false,
-						 "mysql port", 3306);
-
-
 incline_mysql*
 incline_mysql::factory::create(const string& host, unsigned short port)
 {
-  return new incline_mysql(host.empty() ? *opt_mysql_host_ : host,
-			   port == 0 ? *opt_mysql_port_ : port);
-}
-
-string
-incline_mysql::factory::get_hostport() const
-{
-  stringstream ss;
-  ss << *incline_mysql::opt_mysql_host_ << ':'
-     << *incline_mysql::opt_mysql_port_;
-  return ss.str();
+  if (port == 0) {
+    port = *opt_port_ == 0 ? default_port() : *opt_port_;
+  }
+  return new incline_mysql(host.empty() ? *opt_host_ : host, port);
 }
 
 incline_mysql::~incline_mysql()
@@ -79,6 +61,6 @@ incline_mysql::query(vector<vector<value_t> >& rows, const string& stmt)
 incline_mysql::incline_mysql(const string& host, unsigned short port)
   : super(host, port), dbh_(NULL)
 {
-  dbh_ = new tmd::conn_t(host_, *opt_mysql_user_, *opt_mysql_password_,
-			 *opt_database_, port_);
+  dbh_ = new tmd::conn_t(host_, *opt_user_, *opt_password_, *opt_database_,
+			 port_);
 }

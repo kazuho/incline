@@ -12,7 +12,8 @@ public:
     virtual ~factory() {}
     virtual incline_dbms* create(const std::string& host, unsigned short port) = 0;
     incline_dbms* create() { return create(std::string(), 0); }
-    virtual std::string get_hostport() const = 0;
+    std::string get_hostport() const;
+    virtual unsigned short default_port() const = 0;
   };
   class value_t {
   protected:
@@ -63,6 +64,10 @@ private:
 public:
   static getoptpp::opt_str opt_rdbms_;
   static getoptpp::opt_str opt_database_;
+  static getoptpp::opt_str opt_host_;
+  static getoptpp::opt_int opt_port_;
+  static getoptpp::opt_str opt_user_;
+  static getoptpp::opt_str opt_password_;
   static factory* factory_;
   static bool setup_factory();
 };

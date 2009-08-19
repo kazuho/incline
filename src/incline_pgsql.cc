@@ -6,15 +6,6 @@ using namespace std;
 
 #define THROW_PQ_ERROR(dbh) throw error_t(PQerrorMessage(dbh))
 
-getoptpp::opt_str incline_pgsql::opt_pgsql_host_(0, "pgsql-host", false,
-						 "pgsql host", "127.0.0.1");
-getoptpp::opt_str incline_pgsql::opt_pgsql_user_(0, "pgsql-user", false,
-						 "pgsql user", "postgres");
-getoptpp::opt_str incline_pgsql::opt_pgsql_password_(0, "pgsql-password", false,
-						     "pgsql password", "");
-getoptpp::opt_int incline_pgsql::opt_pgsql_port_(0, "pgsql-port", false,
-						 "pgsql port", 3306);
-
 class PGresultWrap {
 protected:
   PGresult* r_;
@@ -30,17 +21,10 @@ private:
 incline_pgsql*
 incline_pgsql::factory::create(const string& host, unsigned short port)
 {
-  return new incline_pgsql(host.empty() ? *opt_pgsql_host_ : host,
-			   port == 0 ? *opt_pgsql_port_ : port);
-}
-
-string
-incline_pgsql::factory::get_hostport() const
-{
-  stringstream ss;
-  ss << *incline_pgsql::opt_pgsql_host_ << ':'
-     << *incline_pgsql::opt_pgsql_port_;
-  return ss.str();
+  if (port == 0) {
+    port = *opt_port_ == 0 ? default_port() : *opt_port_;
+  }
+  return new incline_pgsql(host.empty() ? *opt_host_ : host, port);
 }
 
 incline_pgsql::~incline_pgsql()
@@ -111,10 +95,9 @@ incline_pgsql::incline_pgsql(const string& host, unsigned short port)
   : super(host, port), dbh_(NULL)
 {
   stringstream conninfo;
-  conninfo << "host=" << (host.empty() ? *opt_pgsql_host_ : host) << " port="
-	   << (port == 0 ? *opt_pgsql_port_ : port) << " dbname="
-	   << *opt_database_ << " user=" << *opt_pgsql_user_ << " password="
-	   << *opt_pgsql_password_;
+  conninfo << "host=" << host_ << " port=" << port_ << " dbname="
+	   << *opt_database_ << " user=" << *opt_user_ << " password="
+	   << *opt_password_;
   dbh_ = PQconnectdb(conninfo.str().c_str());
   assert(dbh_ != NULL);
   if (PQstatus(dbh_) != CONNECTION_OK) {
