@@ -1,4 +1,5 @@
 #include "incline_mysql.h"
+#include "incline_pgsql.h"
 
 using namespace std;
 
@@ -24,6 +25,8 @@ incline_dbms::setup_factory()
 {
   if (*opt_rdbms_ == "mysql") {
     factory_ = new incline_mysql::factory();
+  } else if (*opt_rdbms_ == "pgsql") {
+    factory_ = new incline_pgsql::factory();
   } else {
     return false;
   }

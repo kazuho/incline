@@ -46,6 +46,9 @@ public:
   struct timeout_error_t : public error_t {
     timeout_error_t(const std::string& s) : error_t(s) {}
   };
+protected:
+  std::string host_;
+  unsigned short port_;
 public:
   virtual ~incline_dbms() {}
   virtual std::string escape(const std::string& s) = 0;
@@ -53,7 +56,7 @@ public:
   void query(std::vector<std::vector<value_t> >& rows, const char* fmt, ...) __attribute__((__format__(__printf__, 3, 4)));
   virtual void query(std::vector<std::vector<value_t> >& rows, const std::string& stmt) = 0;
 protected:
-  incline_dbms() {}
+  incline_dbms(const std::string& host, unsigned short port) : host_(host), port_(port) {}
 private:
   incline_dbms(const incline_dbms&); // not copyable
   incline_dbms& operator=(const incline_dbms&);

@@ -23,13 +23,12 @@ public:
   virtual void execute(const std::string& stmt);
   virtual void query(std::vector<std::vector<value_t> >& rows, const std::string& stmt);
 private:
-  incline_mysql(tmd::conn_t* dbh) : super(), dbh_(dbh) {}
+  incline_mysql(const std::string& host, unsigned short port);
 public:
   static getoptpp::opt_str opt_mysql_host_;
   static getoptpp::opt_str opt_mysql_user_;
   static getoptpp::opt_str opt_mysql_password_;
   static getoptpp::opt_int opt_mysql_port_;
-  static incline_mysql* create(const std::string& host, unsigned short port);
 };
 
 #endif

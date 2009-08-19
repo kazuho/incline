@@ -17,11 +17,8 @@ getoptpp::opt_int incline_mysql::opt_mysql_port_(0, "mysql-port", false,
 incline_mysql*
 incline_mysql::factory::create(const string& host, unsigned short port)
 {
-  tmd::conn_t* dbh
-    = new tmd::conn_t(host.empty() ? *opt_mysql_host_ : host, *opt_mysql_user_,
-		      *opt_mysql_password_, *opt_database_,
-		      port == 0 ? *opt_mysql_port_ : port);
-  return new incline_mysql(dbh);
+  return new incline_mysql(host.empty() ? *opt_mysql_host_ : host,
+			   port == 0 ? *opt_mysql_port_ : port);
 }
 
 string
@@ -41,7 +38,11 @@ incline_mysql::~incline_mysql()
 string
 incline_mysql::escape(const string& s)
 {
-  return tmd::escape(*dbh_, s);
+  try {
+    return tmd::escape(*dbh_, s);
+  } catch (tmd::error_t& e) {
+    throw error_t(e.what());
+  }
 }
 
 void
@@ -56,7 +57,7 @@ incline_mysql::execute(const string& stmt)
     case ER_LOCK_WAIT_TIMEOUT:
       throw timeout_error_t(e.what());
     default:
-      throw;
+      throw error_t(e.what());
     }
   }
 }
@@ -73,4 +74,11 @@ incline_mysql::query(vector<vector<value_t> >& rows, const string& stmt)
       rows.back().push_back(res.field(i));
     }
   }
+}
+
+incline_mysql::incline_mysql(const string& host, unsigned short port)
+  : super(host, port), dbh_(NULL)
+{
+  dbh_ = new tmd::conn_t(host_, *opt_mysql_user_, *opt_mysql_password_,
+			 *opt_database_, port_);
 }

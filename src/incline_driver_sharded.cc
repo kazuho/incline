@@ -260,7 +260,7 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
 	req->success_ = true;
       }
       retry_at_ = 0; // reset so that other threads will reconnect immediately
-    } catch (domain_error& err) {
+    } catch (incline_dbms::error_t& err) {
       // on error, log error, disconnect
       cerr << err.what() << endl;
       delete dbh;
