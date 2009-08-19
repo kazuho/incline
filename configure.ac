@@ -25,10 +25,12 @@ then
 		MYSQL_DIR="no"
 	elif test -d /usr/local/mysql
 	then
-	     MYSQL_DIR=/usr/local/mysql
+		MYSQL_DIR=/usr/local/mysql
 	elif test "$MYSQL_DIR" = "yes"
 	then
-	     AC_MSG_ERROR([could not find mysql])
+		AC_MSG_ERROR([could not find mysql])
+	else
+		MYSQL_DIR="no"
 	fi
 fi
 if test "$MYSQL_DIR" != "no"
@@ -60,10 +62,12 @@ then
 		PGSQL_DIR="no"
 	elif test -d /usr/local/pgsql
 	then
-	     PGSQL_DIR=/usr/local/pgsql
+		PGSQL_DIR=/usr/local/pgsql
 	elif test "$PGSQL_DIR" = "yes"
 	then
-	     AC_MSG_ERROR([could not find pgsql])
+		AC_MSG_ERROR([could not find pgsql])
+	else
+		PGSQL_DIR="no"
 	fi
 fi
 if test "$PGSQL_DIR" != "no"
