@@ -12,7 +12,10 @@ sub create_any {
     my ($klass, %opts) = @_;
     # start server
     my $instance = "Test::$ENV{TEST_DBMS}"->new($opts{$ENV{TEST_DBMS}})
-        or plan skip_all => ${"Test::".$ENV{TEST_DBMS}."::errstr"};
+        or do {
+            no strict 'refs';
+            plan skip_all => ${"Test::".$ENV{TEST_DBMS}."::errstr"};
+        };
     if ($ENV{TEST_DBMS} eq 'postgresql') {
         my $dbh = DBI->connect(
             'DBI:Pg:dbname=template1;user=postgres;port=' . $instance->port,
