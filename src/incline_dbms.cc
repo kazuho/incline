@@ -1,7 +1,12 @@
 #include <cstdarg>
 #include <sstream>
-#include "incline_mysql.h"
-#include "incline_pgsql.h"
+#include "incline_config.h"
+#ifdef WITH_MYSQL
+# include "incline_mysql.h"
+#endif
+#ifdef WITH_PGSQL
+# include "incline_pgsql.h"
+#endif
 
 using namespace std;
 
@@ -45,12 +50,17 @@ incline_dbms::query(std::vector<std::vector<value_t> >& rows, const char* fmt,
 bool
 incline_dbms::setup_factory()
 {
+#ifdef WITH_MYSQL
   if (*opt_rdbms_ == "mysql" || *opt_rdbms_ == "mysqld") {
     factory_ = new incline_mysql::factory();
-  } else if (*opt_rdbms_ == "pgsql" || *opt_rdbms_ == "postgresql") {
-    factory_ = new incline_pgsql::factory();
-  } else {
-    return false;
+    return true;
   }
-  return true;
+#endif
+#ifdef WITH_PGSQL
+  if (*opt_rdbms_ == "pgsql" || *opt_rdbms_ == "postgresql") {
+    factory_ = new incline_pgsql::factory();
+    return true;
+  }
+#endif
+  return false;
 }

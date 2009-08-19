@@ -15,13 +15,13 @@ AC_SUBST(LIBTOOL)
 AC_ARG_WITH(mysql,
 	[  --with-mysql=dir        mysql directory [[automatic]]],
 	[MYSQL_DIR="$withval"])
-if test "$MYSQL_DIR" = "yes" -o ! -n "$MYSQL_DIR"
+if test "$MYSQL_DIR" = "yes" -o -z "$MYSQL_DIR"
 then
 	AC_CHECK_LIB(mysqlclient_r, mysql_errno, [FOUND_MYSQL=1])
 	if test "$FOUND_MYSQL"
 	then
 		LDFLAGS="$LDFLAGS -lmysqlclient_r"
-		AC_DEFINE([WITH_MYSQL],1,[create mysql driver])
+		WITH_MYSQL=1
 		MYSQL_DIR="no"
 	elif test -d /usr/local/mysql
 	then
@@ -39,19 +39,24 @@ then
 	fi
 	CPPFLAGS="$CPPFLAGS -I$MYSQL_DIR/include/mysql -I$MYSQL_DIR/include"
 	LDFLAGS="$LDFLAGS -L$MYSQL_DIR/lib/mysql -L$MYSQL_DIR/lib -lmysqlclient_r"
+	WITH_MYSQL=1
+fi
+if test "$WITH_MYSQL"
+then
 	AC_DEFINE([WITH_MYSQL],1,[create mysql driver])
 fi
+AM_CONDITIONAL(WITH_MYSQL, test "$WITH_MYSQL")
 
 AC_ARG_WITH(pgsql,
 	[  --with-pgsql=dir        postgresql directory [[automatic]]],
 	[PGSQL_DIR="$withval"])
-if test "$PGSQL_DIR" = "yes" -o ! -n "$PGSQL"
+if test "$PGSQL_DIR" = "yes" -o -z "$PGSQL_DIR"
 then
 	AC_CHECK_LIB(pq, PQerrorMessage, [FOUND_PGSQL=1])
 	if test "$FOUND_PGSQL"
 	then
 		LDFLAGS="$LDFLAGS -lpq"
-		AC_DEFINE([WITH_PGSQL],1,[create pgsql driver])
+		WITH_PGSQL=1
 		PGSQL_DIR="no"
 	elif test -d /usr/local/pgsql
 	then
@@ -69,7 +74,17 @@ then
 	fi
 	CPPFLAGS="$CPPFLAGS -I$PGSQL_DIR/include"
 	LDFLAGS="$LDFLAGS -L$PGSQL_DIR/lib -lpq"
+	WITH_PGSQL=1
+fi
+if test "$WITH_PGSQL"
+then
 	AC_DEFINE([WITH_PGSQL],1,[create pgsql driver])
+fi
+AM_CONDITIONAL(WITH_PGSQL, test "$WITH_PGSQL")
+
+if test "$WITH_MYSQL" = "" -a "$WITH_PGSQL" = ""
+then
+	AC_MSG_ERROR([no datatabase driver found, please set them manually using --with-XXX])
 fi
 
 CFLAGS="$CFLAGS -Wall -g -O"
