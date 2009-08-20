@@ -23,6 +23,17 @@ incline_mysql::factory::create_trigger(const string& name, const string& event,
   return incline_util::vectorize(r);
 }
 
+string
+incline_mysql::factory::create_queue_table(const string& table_name,
+					   const string& column_defs,
+					   bool if_not_exists) const
+{
+  return string("CREATE TABLE ") + (if_not_exists ? "IF NOT EXISTS " : "")
+    + table_name + " (_iq_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,"
+    "_iq_action CHAR(1) CHARACTER SET latin1 NOT NULL," + column_defs
+    + ",PRIMARY KEY (_iq_id))";
+}
+
 incline_mysql::~incline_mysql()
 {
   delete dbh_;
@@ -67,6 +78,29 @@ incline_mysql::query(vector<vector<value_t> >& rows, const string& stmt)
       rows.back().push_back(res.field(i));
     }
   }
+}
+
+string
+incline_mysql::get_column_def(const string& table_name,
+			      const string& column_name)
+{
+  tmd::query_t res(*dbh_,
+		   "SELECT UPPER(COLUMN_TYPE),CHARACTER_SET_NAME,IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s' AND COLUMN_NAME='%s'",
+		   tmd::escape(*dbh_, *incline_dbms::opt_database_).c_str(),
+		   tmd::escape(*dbh_, table_name).c_str(),
+		   tmd::escape(*dbh_, column_name).c_str());
+  if (res.fetch().eof()) {
+    throw error_t("failed to obtain column definition of column:" + table_name
+		  + '.' + column_name);
+  }
+  string def(res.field(0));
+  if (res.field(1) != NULL) {
+    def += string(" CHARSET ") + res.field(1);
+  }
+  if (strcmp(res.field(2), "NO") == 0) {
+    def += " NOT NULL";
+  }
+  return def;
 }
 
 incline_mysql::incline_mysql(const string& host, unsigned short port)

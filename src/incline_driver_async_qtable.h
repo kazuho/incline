@@ -76,7 +76,7 @@ public:
   }
 protected:
   std::string _create_table_of(const incline_def_async_qtable* def, const std::string& table_name, bool if_not_exists, incline_dbms* dbh) const;
-  virtual std::vector<std::string> do_build_enqueue_insert_sql(const incline_def* def, const std::string& src_table, const std::string& command, const std::vector<std::string>* cond) const;
+  virtual std::vector<std::string> do_build_enqueue_insert_sql(const incline_def* def, const std::string& src_table, action_t action, const std::vector<std::string>* cond) const;
   virtual std::vector<std::string> do_build_enqueue_delete_sql(const incline_def* def, const std::string& src_table, const std::vector<std::string>* cond) const;
 };
 

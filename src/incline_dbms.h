@@ -16,6 +16,7 @@ public:
     virtual unsigned short default_port() const = 0;
     virtual std::vector<std::string> create_trigger(const std::string& name, const std::string& event, const std::string& time, const std::string& table, const std::string& funcbody) const = 0;
     virtual std::vector<std::string> drop_trigger(const std::string& name, bool if_exists) const;
+    virtual std::string create_queue_table(const std::string& table_name, const std::string& column_defs, bool if_not_exists) const = 0;
     virtual bool has_replace_into() const { return false; }
   };
   class value_t {
@@ -59,6 +60,7 @@ public:
   virtual void execute(const std::string& stmt) = 0;
   void query(std::vector<std::vector<value_t> >& rows, const char* fmt, ...) __attribute__((__format__(__printf__, 3, 4)));
   virtual void query(std::vector<std::vector<value_t> >& rows, const std::string& stmt) = 0;
+  virtual std::string get_column_def(const std::string& table_name, const std::string& column_name) = 0;
 protected:
   incline_dbms(const std::string& host, unsigned short port) : host_(host), port_(port) {}
 private:

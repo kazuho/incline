@@ -18,6 +18,19 @@ private:
   PGresultWrap& operator=(const PGresultWrap&);
 };
 
+static string escape_quote(const string& src)
+{
+  string r;
+  string::size_type start = 0, quote_at;
+  while ((quote_at = src.find('\'', start)) != string::npos) {
+    r += src.substr(start, quote_at - start);
+    r += "''";
+    start = quote_at + 1;
+  }
+  r += src.substr(start);
+  return r;
+}
+
 incline_pgsql*
 incline_pgsql::factory::create(const string& host, unsigned short port)
 {
@@ -34,7 +47,8 @@ incline_pgsql::factory::create_trigger(const string& name, const string& event,
 {
   vector<string> r;
   r.push_back("CREATE FUNCTION " + name + "() RETURNS TRIGGER AS 'BEGIN\n"
-	      + funcbody + "  RETURN NEW;\nEND" + "' language 'plpgsql'");
+	      + escape_quote(funcbody) + "  RETURN NEW;\nEND"
+	      + "' language 'plpgsql'");
   r.push_back("CREATE TRIGGER " + name + ' ' + time + ' ' + event
 	      + " ON " + table + " FOR EACH ROW EXECUTE PROCEDURE " + name
 	      + "()");
@@ -48,6 +62,16 @@ incline_pgsql::factory::drop_trigger(const string& name, bool if_exists) const
   r.push_back(string("DROP FUNCTION ") + (if_exists ? "IF EXISTS " : "")
 	      + name);
   return r;
+}
+
+string
+incline_pgsql::factory::create_queue_table(const string& table_name,
+					   const string& column_defs,
+					   bool if_not_exists) const
+{
+  return string("CREATE TABLE ") + (if_not_exists ? "IF NOT EXISTS " : "")
+    + table_name + " (_iq_id SERIAL,_iq_action CHAR(1) NOT NULL," + column_defs
+    + ",PRIMARY KEY (_iq_id))";
 }
 
 incline_pgsql::~incline_pgsql()
@@ -112,6 +136,30 @@ incline_pgsql::query(vector<vector<value_t> >& rows, const string& stmt)
       rows.back().push_back(PQgetvalue(*ret, i, j));
     }
   }
+}
+
+string
+incline_pgsql::get_column_def(const string& table_name,
+			      const string& column_name)
+{
+  vector<vector<value_t> > rows;
+  super::query(rows,
+	       "SELECT DATA_TYPE,CHARACTER_MAXIMUM_LENGTH,IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE UDT_CATALOG='%s' AND TABLE_NAME='%s' AND COLUMN_NAME='%s'",
+	       escape(*incline_dbms::opt_database_).c_str(),
+	       escape(table_name).c_str(),
+	       escape(column_name).c_str());
+  if (rows.size() != 1) {
+    throw error_t("failed to obtain column definition of column:" + table_name
+		  + '.' + column_name);
+  }
+  string def(*rows[0][0]);
+  if (! rows[0][1]->empty()) {
+    def += '(' + *rows[0][1] + ')';
+  }
+  if (*rows[0][1] == "NO") {
+    def += " NOT NULL";
+  }
+  return def;
 }
 
 incline_pgsql::incline_pgsql(const string& host, unsigned short port)

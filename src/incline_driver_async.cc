@@ -15,7 +15,7 @@ incline_driver_async::create_def() const
 vector<string>
 incline_driver_async::_build_insert_from_def(const incline_def* _def,
 					     const string& src_table,
-					     const string& command,
+					     action_t action,
 					     const vector<string>* cond)
   const
 {
@@ -28,12 +28,12 @@ incline_driver_async::_build_insert_from_def(const incline_def* _def,
       r.push_back("IF (" + do_build_direct_expr(de_col) + ") THEN\\");
       incline_util::push_back(r,
 			      super::_build_insert_from_def(def, src_table,
-							    command, cond),
+							    action, cond),
 			      "  ");
       r.push_back("ELSE\\");
       incline_util::push_back(r,
 			      do_build_enqueue_insert_sql(def, src_table,
-							  command, cond),
+							  action, cond),
 			      "  ");
       r.push_back("END IF");
     } else {
@@ -45,19 +45,19 @@ incline_driver_async::_build_insert_from_def(const incline_def* _def,
       cond_and_dexpr.push_back(direct_expr);
       incline_util::push_back(r,
 			      super::_build_insert_from_def(def, src_table,
-							    command,
+							    action,
 							    &cond_and_dexpr));
       cond_and_dexpr.pop_back();
       cond_and_dexpr.push_back("! (" +  direct_expr + ")");
       incline_util::push_back(r,
 			      do_build_enqueue_insert_sql(def, src_table,
-							  command,
+							  action,
 							  &cond_and_dexpr));
     }
   } else {
     incline_util::push_back(r,
-			    do_build_enqueue_insert_sql(def, src_table,
-							command, cond));
+			    do_build_enqueue_insert_sql(def, src_table, action,
+							cond));
   }
   return r;
 }
@@ -125,12 +125,12 @@ incline_driver_async::_build_update_merge_from_def(const incline_def* _def,
 			     + ')');
     incline_util::push_back(r, 
 			    do_build_enqueue_insert_sql(def, src_table,
-							"REPLACE",
+							act_update,
 							&cond_and_dexpr));
   } else {
     incline_util::push_back(r,
 			    do_build_enqueue_insert_sql(def, src_table,
-							"REPLACE", &cond));
+							act_update, &cond));
   }
   return r;
 }

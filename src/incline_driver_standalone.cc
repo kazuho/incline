@@ -15,7 +15,8 @@ incline_driver_standalone::insert_trigger_of(const string& src_table) const
     const incline_def* def = *di;
     if (def->is_master_of(src_table)) {
       incline_util::push_back(body,
-			      _build_insert_from_def(def, src_table, "INSERT"));
+			      _build_insert_from_def(def, src_table,
+						     act_insert));
     }
   }
   return mgr_->build_trigger_stmt(src_table, "INSERT", body);
@@ -34,7 +35,7 @@ incline_driver_standalone::update_trigger_of(const string& src_table) const
 	if (! def->npk_columns().empty()) {
 	  incline_util::push_back(body,
 				  _build_insert_from_def(def, src_table,
-							 "REPLACE"));
+							 act_update));
 	}
       } else {
 	incline_util::push_back(body,
@@ -63,12 +64,12 @@ incline_driver_standalone::delete_trigger_of(const string& src_table) const
 vector<string>
 incline_driver_standalone::_build_insert_from_def(const incline_def* def,
 						  const string& src_table,
-						  const string& command,
+						  action_t action,
 						  const vector<string>* _cond)
   const
 {
   string sql = _build_insert_from_def(def, def->destination(), src_table,
-				      command, _cond, NULL);
+				      action, _cond, NULL);
   return incline_util::vectorize(sql);
 }
 
@@ -145,7 +146,7 @@ string
 incline_driver_standalone::_build_insert_from_def(const incline_def *def,
 						  const string& dest_table,
 						  const string& src_table,
-						  const string& command,
+						  action_t action,
 						  const vector<string>* _cond,
 						  const map<string, string>* extra_columns)
 {
@@ -154,8 +155,8 @@ incline_driver_standalone::_build_insert_from_def(const incline_def *def,
     incline_util::push_back(cond, *_cond);
   }
   string sql;
-  bool use_update =
-    command == "REPLACE" && ! incline_dbms::factory_->has_replace_into();
+  bool use_update = action == act_update
+    && ! incline_dbms::factory_->has_replace_into();
   
   if (! use_update) {
     // INSERT or REPLACE
@@ -167,7 +168,8 @@ incline_driver_standalone::_build_insert_from_def(const incline_def *def,
 			 ? "NEW" + ci->first.substr(src_table.size())
 			 : ci->first);
     }
-    sql = command + " INTO " + dest_table + " ("
+    sql = (action == act_insert ? "INSERT INTO " : "REPLACE INTO ") + dest_table
+      + " ("
       + incline_util::join(',', incline_util::filter("%2", def->columns()));
     if (extra_columns != NULL) {
       sql += ","
@@ -185,8 +187,12 @@ incline_driver_standalone::_build_insert_from_def(const incline_def *def,
 			 : ci->first);
     }
     sql = "UPDATE " + dest_table + " SET ("
-      + incline_util::join(',', incline_util::filter("%2", def->npk_columns()))
-      + ")=(" + incline_util::join(',', src_cols);
+      + incline_util::join(',', incline_util::filter("%2", def->npk_columns()));
+    if (extra_columns != NULL) {
+      sql += ","
+	+ incline_util::join(',', incline_util::filter("%1", *extra_columns));
+    }
+    sql += ")=(" + incline_util::join(',', src_cols);
     for (map<string, string>::const_iterator ci = def->pk_columns().begin();
 	 ci != def->pk_columns().end();
 	 ++ci) {

@@ -1,25 +1,40 @@
 use strict;
 use warnings;
 
+use lib qw(t);
+
 use DBI;
+use InclineTest;
 use Scope::Guard;
-use Test::mysqld;
+use Test::More;
 
-use Test::More tests => 19;
-
-my $mysqld = Test::mysqld->new(
-    my_cnf => {
-        'bind-address' => '127.0.0.1',
-        port           => 19010,
+my $instance = InclineTest->create_any(
+    mysqld => {
+        my_cnf => {
+            'bind-address'           => '127.0.0.1',
+            port                     => 19010,
+            'default-storage-engine' => 'INNODB',
+        },
+    },
+    postgresql => {
+        port => 19010,
     },
 );
-my @incline_cmd = qw(src/incline --mode=queue-table --rdbms=mysql --port=19010 --source=example/single.json --database=test);
+
+plan tests => 19;
+
+my @incline_cmd = (
+    qw(src/incline),
+    "--rdbms=$ENV{TEST_DBMS}",
+    qw(--mode=queue-table --port=19010 --source=example/single.json),
+    qw(--database=test),
+);
 
 my $_dbh;
 
 sub dbh {
-    $_dbh ||= DBI->connect(
-        'dbi:mysql:test;user=root;mysql_socket=' . $mysqld->my_cnf->{socket},
+    $_dbh ||= InclineTest->connect(
+        'DBI:any(PrintWarn=>0,RaiseError=>0):dbname=test;user=root;host=127.0.0.1;port=19010'
     ) or die DBI->errstr;
     $_dbh;
 }
@@ -33,12 +48,16 @@ sub dbh_close {
 ok(dbh()->do("DROP TABLE IF EXISTS $_"), "drop $_")
     for qw/incline_dest incline_src/;
 ok(
-    dbh()->do('CREATE TABLE incline_dest (_id INT UNSIGNED NOT NULL,_message VARCHAR(255) NOT NULL,PRIMARY KEY(_id)) ENGINE=InnoDB'),
+    dbh()->do('CREATE TABLE incline_dest (_id INT NOT NULL,_message VARCHAR(255) NOT NULL,PRIMARY KEY(_id))'),
     'create dest table',
 );
 ok(
-    dbh()->do('CREATE TABLE incline_src (id INT UNSIGNED NOT NULL AUTO_INCREMENT,message VARCHAR(255) NOT NULL,PRIMARY KEY (id)) ENGINE=InnoDB'),
-    'create dest table',
+    dbh()->do(
+        InclineTest->adjust_ddl(
+            'CREATE TABLE incline_src (id SERIAL,message VARCHAR(255) NOT NULL,PRIMARY KEY (id))',
+        ),
+    ),
+    'create src table',
 );
 
 # load rules
@@ -79,19 +98,19 @@ ok(system(@incline_cmd, 'create-trigger') == 0, 'create queue');
         );
     };
     ok(
-        dbh()->do('INSERT INTO incline_src (message) VALUES ("hello")'),
+        dbh()->do(q{INSERT INTO incline_src (message) VALUES ('hello')}),
         'insert',
     );
     is_deeply($cmpf->(), 'post insertion check');
     ok(
         dbh()->do(
-            'INSERT INTO incline_src (message) VALUES ("hello"),("ciao")',
+            q{INSERT INTO incline_src (message) VALUES ('hello'),('ciao')},
         ),
         'insert',
     );
     is_deeply($cmpf->(), 'post insertion check');
     ok(
-        dbh()->do('UPDATE incline_src SET message="good bye" WHERE id%2!=0'),
+        dbh()->do(q{UPDATE incline_src SET message='good bye' WHERE id%2!=0}),
         'update',
     );
     is_deeply($cmpf->(), 'post update check');
@@ -109,3 +128,5 @@ ok(system(@incline_cmd, 'drop-trigger') == 0, 'drop queue if exists');
 ok(system(@incline_cmd, 'drop-queue') == 0, 'drop queue');
 ok(dbh()->do("DROP TABLE IF EXISTS $_"), "drop $_")
     for qw/incline_dest incline_src/;
+
+1;

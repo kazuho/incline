@@ -75,29 +75,13 @@ incline_driver_async_qtable::_create_table_of(const incline_def_async_qtable*
   for (map<string, string>::const_iterator ci = def->columns().begin();
        ci != def->columns().end();
        ++ci) {
-    vector<vector<incline_dbms::value_t> > rows;
-    dbh->query(rows,
-	       "SELECT UPPER(COLUMN_TYPE),CHARACTER_SET_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s' AND COLUMN_NAME='%s'",
-	       dbh->escape(*incline_dbms::opt_database_).c_str(),
-	       dbh->escape(def->destination()).c_str(),
-	       dbh->escape(ci->second).c_str());
-    if (rows.empty()) {
-      // TODO throw an exception instead
-      cerr << "failed to obtain column definition of: " << ci->first << endl;
-      exit(4);
-    }
-    col_defs.push_back(ci->second + ' ' + *rows[0][0]);
-    if (! rows[0][1].is_null()) {
-      col_defs.back() += string(" CHARSET ") + *rows[0][1];
-    }
-    col_defs.back() += " NOT NULL";
+    col_defs.push_back(ci->second + ' '
+		       + dbh->get_column_def(def->destination(), ci->second));
   }
-  return string("CREATE TABLE ") + (if_not_exists ? "IF NOT EXISTS " : "")
-    + table_name
-    + (" (_iq_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,"
-       " _iq_action CHAR(1) CHARACTER SET latin1 NOT NULL,")
-    + incline_util::join(',', col_defs)
-    + ",PRIMARY KEY (_iq_id)) ENGINE InnoDB";
+  return
+    incline_dbms::factory_
+    ->create_queue_table(table_name, incline_util::join(',', col_defs),
+			 if_not_exists);
 }
 
 vector<string>
@@ -105,7 +89,7 @@ incline_driver_async_qtable::do_build_enqueue_insert_sql(const incline_def*
 							 _def,
 							 const string&
 							 src_table,
-							 const string& command,
+							 action_t action,
 							 const vector<string>*
 							 cond)
   const
@@ -113,10 +97,12 @@ incline_driver_async_qtable::do_build_enqueue_insert_sql(const incline_def*
   const incline_def_async_qtable* def
     = dynamic_cast<const incline_def_async_qtable*>(_def);
   map<string, string> extra_columns;
-  extra_columns["_iq_action"] = "'R'";
+  extra_columns["_iq_action"] = "'";
+  extra_columns["_iq_action"].push_back((char)action);
+  extra_columns["_iq_action"].push_back('\'');
   string sql
     = incline_driver_standalone::_build_insert_from_def(def, def->queue_table(),
-							src_table, command,
+							src_table, act_insert,
 							cond, &extra_columns);
   return incline_util::vectorize(sql);
 }
@@ -238,10 +224,10 @@ void* incline_driver_async_qtable::forwarder::run()
 	     ri != res.end();
 	     ++ri) {
 	  iq_ids.push_back(*(*ri)[0]);
-	  char action = (*(*ri)[1])[0];
+	  action_t action = (action_t)(*(*ri)[1])[0];
 	  rows.push_back(make_pair(action, vector<string>()));
 	  for (size_t i = 0;
-	       i < (action == 'R'
+	       i < (action != act_delete
 		    ? def_->columns().size() : def_->pk_columns().size());
 	       ++i) {
 	    rows.back().second.push_back(*(*ri)[i + 2]);
@@ -256,7 +242,7 @@ void* incline_driver_async_qtable::forwarder::run()
       if (! extra_cond.empty()) {
 	last_id = iq_ids.back();
       }
-      vector<const vector<string>*> replace_rows, delete_pks;
+      vector<const vector<string>*> insert_rows, update_rows, delete_pks;
       // fill replace_rows and delete_rows
       // compile error gcc 4.0.1 (mac) when using const_reverse_iter
       for (vector<pair<char, vector<string> > >::reverse_iterator ri
@@ -278,10 +264,17 @@ void* incline_driver_async_qtable::forwarder::run()
 	}
 	// row with same pk not exists, register it
 	switch (ri->first) {
-	case 'R': // replace
-	  replace_rows.push_back(&ri->second);
+	case act_insert:
+	  insert_rows.push_back(&ri->second);
 	  break;
-	case 'D': // delete
+	case act_update:
+	  if (incline_dbms::factory_->has_replace_into()) {
+	    insert_rows.push_back(&ri->second);
+	  } else {
+	    update_rows.push_back(&ri->second);
+	  }
+	  break;
+	case act_delete:
 	  delete_pks.push_back(&ri->second);
 	  break;
 	default:
@@ -291,7 +284,8 @@ void* incline_driver_async_qtable::forwarder::run()
 	;
       }
       // update and remove from queue if successful
-      if (do_update_rows(replace_rows, delete_pks)) {
+      // TODO
+      if (do_update_rows(insert_rows, delete_pks)) {
 	dbh_->execute(clear_queue_query_base_ + '('
 		      + incline_util::join(',', iq_ids) + ')');
       }
