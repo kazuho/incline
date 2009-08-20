@@ -1,45 +1,70 @@
 use strict;
 use warnings;
 
+use lib qw(t);
 use DBI;
+use InclineTest;
 use Scope::Guard;
-use Test::mysqld;
+use Test::More;;
 
-use Test::More tests => 51;
+# skip tests if dbms does not exist
+InclineTest->create_any(
+    mysqld => {
+        my_cnf => { 'skip-networking' => '' },
+    },
+    postgresql => {},
+);
 
-my @incline_cmd = qw(src/incline --mode=shard --source=example/shard-multimaster.json --shard-source=example/shard-range.json --rdbms=mysql --database=test);
+plan tests => 51;
+
+my @incline_cmd = (
+    qw(src/incline),
+    "--rdbms=$ENV{TEST_DBMS}",
+    qw(--mode=shard --source=example/shard-multimaster.json),
+    qw(--shard-source=example/shard-range.json --database=test),
+);
 my @db_nodes = qw/127.0.0.1:19010 127.0.0.1:19011/; # only use the first two
-my @mysqld;
+my @db;
 my @dbh;
 
 for my $db_node (@db_nodes) {
     my ($db_host, $db_port) = split /:/, $db_node, 2;
-    # start mysqld
-    push @mysqld, Test::mysqld->new(
-        my_cnf => {
-            'bind-address' => $db_host,
-            port           => $db_port,
+    # start db
+    push @db, InclineTest->create_any(
+        mysqld => {
+            my_cnf => {
+                'bind-address'           => $db_host,
+                port                     => $db_port,
+                'default-storage-engine' => 'INNODB',
+            },
+        },
+        postgresql => {
+            port => $db_port,
         },
     );
     # create tables
     push @dbh, do {
-        my $dbh = DBI->connect(
-            "dbi:mysql:test;user=root;host=$db_host;port=$db_port",
+        my $dbh = InclineTest->connect(
+            "DBI:any(PrintWarn=>0,RaiseError=>0):dbname=test;user=root;host=$db_host;port=$db_port",
         ) or die DBI->errstr;
         $dbh;
     };
     ok($dbh[-1]->do("DROP TABLE IF EXISTS $_"), "drop $_")
         for qw/incline_tweet incline_follow incline_timeline/;
     ok(
-        $dbh[-1]->do('CREATE TABLE incline_tweet (id INT UNSIGNED NOT NULL AUTO_INCREMENT,user_id INT UNSIGNED NOT NULL,body VARCHAR(255) NOT NULL,PRIMARY KEY(id),KEY user_id_id (user_id,id)) ENGINE=InnoDB'),
+        $dbh[-1]->do(
+            InclineTest->adjust_ddl(
+                'CREATE TABLE incline_tweet (id SERIAL,user_id INT NOT NULL,body VARCHAR(255) NOT NULL,PRIMARY KEY(id))',
+            ),
+        ),
         'create tweet table',
     );
     ok(
-        $dbh[-1]->do('CREATE TABLE incline_follow (followee INT UNSIGNED NOT NULL,follower INT UNSIGNED NOT NULL,PRIMARY KEY(followee,follower)) ENGINE=InnoDB'),
+        $dbh[-1]->do('CREATE TABLE incline_follow (followee INT NOT NULL,follower INT NOT NULL,PRIMARY KEY(followee,follower))'),
         'create cal_member table',
     );
     ok(
-        $dbh[-1]->do('CREATE TABLE incline_timeline (user_id INT UNSIGNED NOT NULL,tweet_id INT UNSIGNED NOT NULL,PRIMARY KEY(user_id,tweet_id)) ENGINE=InnoDB'),
+        $dbh[-1]->do('CREATE TABLE incline_timeline (user_id INT NOT NULL,tweet_id INT NOT NULL,PRIMARY KEY(user_id,tweet_id))'),
         'create cal_by_user table',
     );
     # load rules
@@ -85,17 +110,17 @@ for my $db_node (@db_nodes) {
     );
     is_deeply($cmpf->(), 'post relations setup check');
     ok(
-        $dbh[0]->do('INSERT INTO incline_tweet (user_id,body) VALUES (1,"hello")'),
+        $dbh[0]->do(q{INSERT INTO incline_tweet (user_id,body) VALUES (1,'hello')}),
         'tweet',
     );
     is_deeply($cmpf->(), 'post tweet check');
     ok(
-        $dbh[0]->do('INSERT INTO incline_tweet (user_id,body) VALUES (2,"ciao")'),
+        $dbh[0]->do(q{INSERT INTO incline_tweet (user_id,body) VALUES (2,'ciao')}),
         'tweet 2',
     );
     is_deeply($cmpf->(), 'post tweet check 2');
     ok(
-        $dbh[0]->do('INSERT INTO incline_tweet (user_id,body) VALUES (3,"hola")'),
+        $dbh[0]->do(q{INSERT INTO incline_tweet (user_id,body) VALUES (3,'hola')}),
         'tweet 3',
     );
     is_deeply($cmpf->(), 'post tweet check 3');
@@ -105,7 +130,7 @@ for my $db_node (@db_nodes) {
     );
     is_deeply($cmpf->(), 'post relation addition check');
     ok(
-        $dbh[0]->do('DELETE FROM incline_tweet WHERE user_id=1 LIMIT 1'),
+        $dbh[0]->do('DELETE FROM incline_tweet WHERE user_id=1'),
         'delete one tweet',
     );
     is_deeply($cmpf->(), 'post tweet deletion check');
@@ -164,7 +189,7 @@ is_deeply(
     };
     is_deeply($cmpf->(), 'post insertion check');
     ok(
-        $dbh[0]->do('INSERT INTO incline_tweet (user_id,body) VALUES (1,"hello again")'),
+        $dbh[0]->do(q{INSERT INTO incline_tweet (user_id,body) VALUES (1,'hello again')}),
         'tweet',
     );
     is_deeply($cmpf->(), 'post tweet check');
@@ -208,3 +233,5 @@ while (@dbh) {
     ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")
         for qw/incline_tweet incline_follow incline_timeline/;
 }
+
+1;

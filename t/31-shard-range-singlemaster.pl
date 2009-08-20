@@ -39,8 +39,8 @@ for my $db_node (@db_nodes) {
     push @db, InclineTest->create_any(
         mysqld => {
             my_cnf => {
-                'bind-address' => $db_host,
-                port           => $db_port,
+                'bind-address'           => $db_host,
+                port                     => $db_port,
                 'default-storage-engine' => 'INNODB',
             },
         },
