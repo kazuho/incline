@@ -1,25 +1,40 @@
 use strict;
 use warnings;
 
+use lib qw(t);
+
 use DBI;
+use InclineTest;
 use Scope::Guard;
-use Test::mysqld;
+use Test::More;
 
-use Test::More tests => 28;
-
-my $mysqld = Test::mysqld->new(
-    my_cnf => {
-        'bind-address' => '127.0.0.1',
-        port           => 19010,
+my $instance = InclineTest->create_any(
+    mysqld => {
+        my_cnf => {
+            'bind-address'           => '127.0.0.1',
+            port                     => 19010,
+            'default-storage-engine' => 'INNODB',
+        },
+    },
+    postgresql => {
+        port => 19010,
     },
 );
-my @incline_cmd = qw(src/incline --mode=queue-table --rdbms=mysql --port=19010 --source=example/multimaster.json --database=test);
+
+plan tests => 28;
+
+my @incline_cmd = (
+    qw(src/incline),
+    "--rdbms=$ENV{TEST_DBMS}",
+    qw(--mode=queue-table --port=19010 --source=example/multimaster.json),
+    qw(--database=test),
+);
 
 my $_dbh;
 
 sub dbh {
-    $_dbh ||= DBI->connect(
-        'dbi:mysql:test;user=root;mysql_socket=' . $mysqld->my_cnf->{socket},
+    $_dbh ||= InclineTest->connect(
+        'DBI:any(PrintWarn=>0,RaiseError=>0):dbname=test;user=root;host=127.0.0.1;port=19010',
     ) or die DBI->errstr;
     $_dbh;
 }
@@ -33,15 +48,19 @@ sub dbh_close {
 ok(dbh()->do("DROP TABLE IF EXISTS $_"), "drop $_")
     for qw/incline_tweet incline_follow incline_timeline/;
 ok(
-    dbh()->do('CREATE TABLE incline_tweet (id INT UNSIGNED NOT NULL AUTO_INCREMENT,user_id INT UNSIGNED NOT NULL,body VARCHAR(255) NOT NULL,PRIMARY KEY(id),KEY user_id_id (user_id,id)) ENGINE=InnoDB'),
+    dbh()->do(
+        InclineTest->adjust_ddl(
+            'CREATE TABLE incline_tweet (id SERIAL,user_id INT NOT NULL,body VARCHAR(255) NOT NULL,PRIMARY KEY(id))',
+        ),
+    ),
     'create tweet table',
 );
 ok(
-    dbh()->do('CREATE TABLE incline_follow (followee INT UNSIGNED NOT NULL,follower INT UNSIGNED NOT NULL,PRIMARY KEY(followee,follower)) ENGINE=InnoDB'),
+    dbh()->do('CREATE TABLE incline_follow (followee INT NOT NULL,follower INT NOT NULL,PRIMARY KEY(followee,follower))'),
     'create cal_member table',
 );
 ok(
-    dbh()->do('CREATE TABLE incline_timeline (user_id INT UNSIGNED NOT NULL,tweet_id INT UNSIGNED NOT NULL,PRIMARY KEY(user_id,tweet_id)) ENGINE=InnoDB'),
+    dbh()->do('CREATE TABLE incline_timeline (user_id INT NOT NULL,tweet_id INT NOT NULL,PRIMARY KEY(user_id,tweet_id))'),
     'create cal_by_user table',
 );
 
@@ -88,17 +107,17 @@ ok(system(@incline_cmd, 'create-trigger') == 0, 'create queue');
     );
     is_deeply($cmpf->(), 'post relations setup check');
     ok(
-        dbh()->do('INSERT INTO incline_tweet (user_id,body) VALUES (1,"hello")'),
+        dbh()->do(q{INSERT INTO incline_tweet (user_id,body) VALUES (1,'hello')}),
         'tweet',
     );
     is_deeply($cmpf->(), 'post tweet check');
     ok(
-        dbh()->do('INSERT INTO incline_tweet (user_id,body) VALUES (2,"ciao")'),
+        dbh()->do(q{INSERT INTO incline_tweet (user_id,body) VALUES (2,'ciao')}),
         'tweet 2',
     );
     is_deeply($cmpf->(), 'post tweet check 2');
     ok(
-        dbh()->do('INSERT INTO incline_tweet (user_id,body) VALUES (3,"hola")'),
+        dbh()->do(q{INSERT INTO incline_tweet (user_id,body) VALUES (3,'hola')}),
         'tweet 3',
     );
     is_deeply($cmpf->(), 'post tweet check 3');
@@ -108,7 +127,7 @@ ok(system(@incline_cmd, 'create-trigger') == 0, 'create queue');
     );
     is_deeply($cmpf->(), 'post relation addition check');
     ok(
-        dbh()->do('DELETE FROM incline_tweet WHERE user_id=1 LIMIT 1'),
+        dbh()->do('DELETE FROM incline_tweet WHERE user_id=1'),
         'delete one tweet',
     );
     is_deeply($cmpf->(), 'post tweet deletion check');
@@ -126,3 +145,7 @@ ok(system(@incline_cmd, 'drop-trigger') == 0, 'drop queue if exists');
 ok(system(@incline_cmd, 'drop-queue') == 0, 'drop queue');
 ok(dbh()->do("DROP TABLE IF EXISTS $_"), "drop $_")
     for qw/incline_tweet incline_follow incline_timeline/;
+
+dbh_close();
+
+1;

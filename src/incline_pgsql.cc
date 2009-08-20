@@ -62,7 +62,8 @@ incline_pgsql::factory::drop_trigger(const string& name, const string& table,
   vector<string> r;
   r.push_back(string("DROP TRIGGER ") + (if_exists ? "IF EXISTS " : "") + name
 	      + " ON " + table);
-  r.push_back(string("DROP FUNCTION ") + name + "()");
+  r.push_back(string("DROP FUNCTION ") + (if_exists ? "IF EXISTS " : "") + name
+	      + "()");
   return r;
 }
 

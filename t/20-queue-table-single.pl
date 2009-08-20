@@ -129,6 +129,6 @@ ok(system(@incline_cmd, 'drop-queue') == 0, 'drop queue');
 ok(dbh()->do("DROP TABLE IF EXISTS $_"), "drop $_")
     for qw/incline_dest incline_src/;
 
-undef $_dbh;
+dbh_close();
 
 1;
