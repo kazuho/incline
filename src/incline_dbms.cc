@@ -1,6 +1,8 @@
 #include <cstdarg>
 #include <sstream>
 #include "incline_config.h"
+#include "incline_dbms.h"
+#include "incline_util.h"
 #ifdef WITH_MYSQL
 # include "incline_mysql.h"
 #endif
@@ -34,6 +36,14 @@ incline_dbms::factory::get_hostport() const
   stringstream ss;
   ss << *incline_dbms::opt_host_ << ':' << port;
   return ss.str();
+}
+
+vector<string>
+incline_dbms::factory::drop_trigger(const string& name, bool if_exists) const
+{
+  return
+    incline_util::vectorize(string("DROP TRIGGER ")
+			    + (if_exists ? "IF EXISTS " : "") + name);
 }
 
 void

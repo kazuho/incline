@@ -23,7 +23,7 @@ my $instance = InclineTest->create_any(
 plan tests => 14;
 
 my $dbh = InclineTest->connect(
-    'DBI:any:dbname=test;user=root;host=127.0.0.1;port=19010',
+    'DBI:any(PrintWarn=>0):dbname=test;user=root;host=127.0.0.1;port=19010',
 ) or die $DBI::errstr;
 
 # create tables
@@ -58,17 +58,17 @@ my $cmpf = sub {
     );
 };
 ok(
-    $dbh->do('INSERT INTO incline_src (message) VALUES ("hello")'),
+    $dbh->do(q{INSERT INTO incline_src (message) VALUES ('hello')}),
     'insert',
 );
 is_deeply($cmpf->(), 'post insertion check');
 ok(
-    $dbh->do('INSERT INTO incline_src (message) VALUES ("hello"),("ciao")'),
+    $dbh->do(q{INSERT INTO incline_src (message) VALUES ('hello'),('ciao')}),
     'insert',
 );
 is_deeply($cmpf->(), 'post insertion check');
 ok(
-    $dbh->do('UPDATE incline_src SET message="good bye" WHERE id%2!=0'),
+    $dbh->do(q{UPDATE incline_src SET message='good bye' WHERE id%2!=0}),
     'update',
 );
 is_deeply($cmpf->(), 'post update check');

@@ -14,6 +14,9 @@ public:
     incline_dbms* create() { return create(std::string(), 0); }
     std::string get_hostport() const;
     virtual unsigned short default_port() const = 0;
+    virtual std::vector<std::string> create_trigger(const std::string& name, const std::string& event, const std::string& time, const std::string& table, const std::string& funcbody) const = 0;
+    virtual std::vector<std::string> drop_trigger(const std::string& name, bool if_exists) const;
+    virtual bool has_replace_into() const { return false; }
   };
   class value_t {
   protected:

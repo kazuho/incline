@@ -24,6 +24,11 @@ sub create_any {
             or die $dbh->errstr;
         $dbh->do('CREATE DATABASE test')
             or die $dbh->errstr;
+        $dbh = DBI->connect(
+            'DBI:Pg:dbname=test;user=root;port=' . $instance->port,
+        ) or die $DBI::errstr;
+        $dbh->do(q{CREATE LANGUAGE 'plpgsql'})
+            or die $dbh->errstr;
     }
     $instance;
 }

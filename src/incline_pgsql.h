@@ -7,10 +7,13 @@
 class incline_pgsql : public incline_dbms {
 public:
   typedef incline_dbms super;
-  struct factory : public incline_dbms::factory {
+  struct factory : public super::factory {
+    typedef super::factory super;
     virtual ~factory() {}
     virtual incline_pgsql* create(const std::string& host, unsigned short port);
     virtual unsigned short default_port() const { return 5432; }
+    virtual std::vector<std::string> create_trigger(const std::string& name, const std::string& event, const std::string& time, const std::string& table, const std::string& funcbody) const;
+    virtual std::vector<std::string> drop_trigger(const std::string& name, bool if_exists) const;
   };
 protected:
   PGconn* dbh_;

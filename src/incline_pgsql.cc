@@ -27,6 +27,29 @@ incline_pgsql::factory::create(const string& host, unsigned short port)
   return new incline_pgsql(host.empty() ? *opt_host_ : host, port);
 }
 
+vector<string>
+incline_pgsql::factory::create_trigger(const string& name, const string& event,
+				       const string& time, const string& table,
+				       const string& funcbody) const
+{
+  vector<string> r;
+  r.push_back("CREATE FUNCTION " + name + "() RETURNS TRIGGER AS 'BEGIN\n"
+	      + funcbody + "RETURN NEW;\nEND" + "' language 'plpgsql'");
+  r.push_back("CREATE TRIGGER " + name + ' ' + time + ' ' + event
+	      + " ON " + table + " FOR EACH ROW EXECUTE PROCEDURE " + name
+	      + "()");
+  return r;
+}
+
+vector<string>
+incline_pgsql::factory::drop_trigger(const string& name, bool if_exists) const
+{
+  vector<string> r(super::drop_trigger(name, if_exists));
+  r.push_back(string("DROP FUNCTION ") + (if_exists ? "IF EXISTS " : "")
+	      + name);
+  return r;
+}
+
 incline_pgsql::~incline_pgsql()
 {
   PQfinish(dbh_);

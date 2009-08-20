@@ -52,6 +52,15 @@ inline incline_driver_sharded* shard_driver()
   return static_cast<incline_driver_sharded*>(mgr->driver());
 }
 
+static incline_dbms* dbh()
+{
+  static incline_dbms* dbh = NULL;
+  if (dbh == NULL) {
+    dbh = incline_dbms::factory_->create();
+  }
+  return dbh;
+}
+
 int
 main(int argc, char** argv)
 {
@@ -116,7 +125,6 @@ main(int argc, char** argv)
 	 << endl;
     exit(1);
   }
-  auto_ptr<incline_dbms> dbh(incline_dbms::factory_->create());
   
   // parse sharded_source
   if (*opt_mode == "shard") {
@@ -158,10 +166,10 @@ main(int argc, char** argv)
   // handle the command
   if (command == "create-trigger") {
     vector<string> stmt(mgr->create_trigger_all(false));
-    run_all_stmt(dbh.get(), stmt);
+    run_all_stmt(dbh(), stmt);
   } else if (command == "drop-trigger") {
     vector<string> stmt(mgr->drop_trigger_all(true));
-    run_all_stmt(dbh.get(), stmt);
+    run_all_stmt(dbh(), stmt);
   } else if (command == "print-trigger") {
     vector<string> stmt(mgr->create_trigger_all(false));
     picojson::value a(picojson::array_type, false);
@@ -169,11 +177,11 @@ main(int argc, char** argv)
     a.serialize(ostream_iterator<char>(cout));
     cout << endl;
   } else if (command == "create-queue") {
-    vector<string> stmt(aq_driver()->create_table_all(false, dbh.get()));
-    run_all_stmt(dbh.get(), stmt);
+    vector<string> stmt(aq_driver()->create_table_all(false, dbh()));
+    run_all_stmt(dbh(), stmt);
   } else if (command == "drop-queue") {
     vector<string> stmt(aq_driver()->drop_table_all(true));
-    run_all_stmt(dbh.get(), stmt);
+    run_all_stmt(dbh(), stmt);
   } else if (command == "forward") {
     int log_fd = -1;
     if (*opt_forwarder_log_file == "-") {

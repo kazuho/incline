@@ -1,4 +1,5 @@
 #include "incline_mysql.h"
+#include "incline_util.h"
 #include "tmd.h"
 
 using namespace std;
@@ -10,6 +11,16 @@ incline_mysql::factory::create(const string& host, unsigned short port)
     port = *opt_port_ == 0 ? default_port() : *opt_port_;
   }
   return new incline_mysql(host.empty() ? *opt_host_ : host, port);
+}
+
+vector<string>
+incline_mysql::factory::create_trigger(const string& name, const string& event,
+				       const string& time, const string& table,
+				       const string& funcbody) const
+{
+  string r = "CREATE TRIGGER " + name + ' ' + time + ' ' + event + " ON "
+    + table + " FOR EACH ROW BEGIN\n" + funcbody + "END";
+  return incline_util::vectorize(r);
 }
 
 incline_mysql::~incline_mysql()

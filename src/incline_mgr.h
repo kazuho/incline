@@ -24,7 +24,7 @@ public:
   std::vector<std::string> insert_trigger_of(const std::string& src_table) const;
   std::vector<std::string> update_trigger_of(const std::string& src_table) const;
   std::vector<std::string> delete_trigger_of(const std::string& src_table) const;
-  std::string drop_trigger_of(const std::string& src_table, const std::string& event, bool if_exists) const;
+  std::vector<std::string> drop_trigger_of(const std::string& src_table, const std::string& event, bool if_exists) const;
   std::vector<std::string> build_trigger_stmt(const std::string& src_table, const std::string& event, const std::vector<std::string>& body) const;
 protected:
   std::string _build_trigger_name(const std::string& src_table, const std::string& event) const;
