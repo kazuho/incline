@@ -1,22 +1,37 @@
 use strict;
 use warnings;
 
+use lib qw(t);
+
 use DBI;
+use InclineTest;
 use Scope::Guard;
-use Test::mysqld;
+use Test::More;
 
-use Test::More tests => 21;
-
-my $mysqld = Test::mysqld->new(
-    my_cnf => {
-        'bind-address' => '127.0.0.1',
-        port           => 19010,
+my $instance = InclineTest->create_any(
+    mysqld => {
+        my_cnf => {
+            'bind-address'           => '127.0.0.1',
+            port                     => 19010,
+            'default-storage-engine' => 'INNODB',
+        },
+    },
+    postgresql => {
+        port => 19010,
     },
 );
-my @incline_cmd = qw(src/incline --mode=queue-table --rdbms=mysql --port=19010 --source=example/singlemaster.json --database=test);
 
-my $dbh = DBI->connect(
-    'dbi:mysql:test;user=root;mysql_socket=' . $mysqld->my_cnf->{socket},
+plan tests => 19;
+
+my @incline_cmd = (
+    qw(src/incline),
+    "--rdbms=$ENV{TEST_DBMS}",
+    qw(--mode=queue-table --port=19010 --source=example/singlemaster.json),
+    qw(--database=test),
+);
+
+my $dbh = InclineTest->connect(
+    'DBI:any(PrintWarn=>0,RaiseError=>0):dbname=test;user=root;host=127.0.0.1;port=19010',
 ) or die DBI->errstr;
 
 # create tables
@@ -99,3 +114,5 @@ ok(system(@incline_cmd, 'drop-trigger') == 0, 'drop queue if exists');
 ok(system(@incline_cmd, 'drop-queue') == 0, 'drop queue');
 ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")
     for qw/incline_cal incline_cal_member incline_cal_by_user/;
+
+1;
