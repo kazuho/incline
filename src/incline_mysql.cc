@@ -34,6 +34,15 @@ incline_mysql::factory::create_queue_table(const string& table_name,
     + ",PRIMARY KEY (_iq_id))";
 }
 
+vector<string>
+incline_mysql::factory::drop_trigger(const string& name, const string& table,
+				    bool if_exists) const
+{
+  return
+    incline_util::vectorize(string("DROP TRIGGER ")
+			    + (if_exists ? "IF EXISTS " : "") + name);
+}
+
 incline_mysql::~incline_mysql()
 {
   delete dbh_;

@@ -38,14 +38,6 @@ incline_dbms::factory::get_hostport() const
   return ss.str();
 }
 
-vector<string>
-incline_dbms::factory::drop_trigger(const string& name, bool if_exists) const
-{
-  return
-    incline_util::vectorize(string("DROP TRIGGER ")
-			    + (if_exists ? "IF EXISTS " : "") + name);
-}
-
 void
 incline_dbms::query(std::vector<std::vector<value_t> >& rows, const char* fmt,
 		    ...)

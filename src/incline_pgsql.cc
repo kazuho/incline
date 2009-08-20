@@ -56,11 +56,13 @@ incline_pgsql::factory::create_trigger(const string& name, const string& event,
 }
 
 vector<string>
-incline_pgsql::factory::drop_trigger(const string& name, bool if_exists) const
+incline_pgsql::factory::drop_trigger(const string& name, const string& table,
+				     bool if_exists) const
 {
-  vector<string> r(super::drop_trigger(name, if_exists));
-  r.push_back(string("DROP FUNCTION ") + (if_exists ? "IF EXISTS " : "")
-	      + name);
+  vector<string> r;
+  r.push_back(string("DROP TRIGGER ") + (if_exists ? "IF EXISTS " : "") + name
+	      + " ON " + table);
+  r.push_back(string("DROP FUNCTION ") + name + "()");
   return r;
 }
 

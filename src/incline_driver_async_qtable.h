@@ -20,7 +20,7 @@ public:
     std::vector<std::string> dest_pk_columns_;
     std::string fetch_query_base_;
     std::string clear_queue_query_base_;
-    std::string replace_row_query_base_;
+    std::string insert_row_query_base_;
     std::string delete_row_query_base_;
   public:
     forwarder(forwarder_mgr* mgr, const incline_def_async_qtable* def, incline_dbms* dbh, int poll_interval);
@@ -30,10 +30,11 @@ public:
     const incline_def_async_qtable* def() const { return def_; }
     void* run();
   protected:
-    virtual bool do_update_rows(const std::vector<const std::vector<std::string>*>& replace_rows, const std::vector<const std::vector<std::string>*>& delete_rows);
+    virtual bool do_update_rows(const std::vector<const std::vector<std::string>*>& insert_rows, const std::vector<const std::vector<std::string>*>& update_rows, const std::vector<const std::vector<std::string>*>& delete_rows);
     virtual std::string do_get_extra_cond();
   protected:
-    void replace_rows(incline_dbms* dbh, const std::vector<const std::vector<std::string>*>& rows) const;
+    void insert_rows(incline_dbms* dbh, const std::vector<const std::vector<std::string>*>& rows) const;
+    void update_rows(incline_dbms* dbh, const std::vector<const std::vector<std::string>*>& rows) const;
     void delete_rows(incline_dbms* dbh, const std::vector<const std::vector<std::string>*>& rows) const;
   public:
     static std::vector<const std::vector<std::string>*> ____to_ptr_rows(const std::vector<std::vector<std::string> >& input) {

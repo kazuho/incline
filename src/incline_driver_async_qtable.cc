@@ -174,13 +174,14 @@ incline_driver_async_qtable::forwarder::forwarder(forwarder_mgr* mgr,
   fetch_query_base_ += " FROM " + def_->queue_table() + ' ';
   clear_queue_query_base_ = "DELETE FROM " + def_->queue_table()
     + " WHERE _iq_id IN ";
-  // build write queries
-  {
+  { // build write queries
     vector<string> dest_cols(incline_util::filter("%2", def->pk_columns()));
     incline_util::push_back(dest_cols,
 			    incline_util::filter("%2", def->npk_columns()));
-    replace_row_query_base_ =
-      "REPLACE INTO " + def->destination() + " ("
+    insert_row_query_base_ =
+      (incline_dbms::factory_->has_replace_into()
+       ? "REPLACE INTO " : "INSERT INTO ")
+      + def->destination() + " ("
       + incline_util::join(',', dest_cols) + ") VALUES ";
   }
   delete_row_query_base_ = "DELETE FROM " + def->destination() + " WHERE ";
@@ -285,7 +286,7 @@ void* incline_driver_async_qtable::forwarder::run()
       }
       // update and remove from queue if successful
       // TODO
-      if (do_update_rows(insert_rows, delete_pks)) {
+      if (do_update_rows(insert_rows, update_rows, delete_pks)) {
 	dbh_->execute(clear_queue_query_base_ + '('
 		      + incline_util::join(',', iq_ids) + ')');
       }
@@ -300,10 +301,13 @@ void* incline_driver_async_qtable::forwarder::run()
 }
 
 bool
-incline_driver_async_qtable::forwarder::do_update_rows(const vector<const vector<string>*>& replace_rows, const vector<const vector<string>*>& delete_rows)
+incline_driver_async_qtable::forwarder::do_update_rows(const vector<const vector<string>*>& insert_rows, const vector<const vector<string>*>& update_rows, const vector<const vector<string>*>& delete_rows)
 {
-  if (! replace_rows.empty()) {
-    this->replace_rows(dbh_, replace_rows);
+  if (! insert_rows.empty()) {
+    this->insert_rows(dbh_, insert_rows);
+  }
+  if (! update_rows.empty()) {
+    this->update_rows(dbh_, update_rows);
   }
   if (! delete_rows.empty()) {
     this->delete_rows(dbh_, delete_rows);
@@ -318,10 +322,10 @@ incline_driver_async_qtable::forwarder::do_get_extra_cond()
 }
 
 void
-incline_driver_async_qtable::forwarder::replace_rows(incline_dbms* dbh,
-						     const vector<const vector<string>*>& rows) const
+incline_driver_async_qtable::forwarder::insert_rows(incline_dbms* dbh,
+						    const vector<const vector<string>*>& rows) const
 {
-  string sql = replace_row_query_base_ + '(';
+  string sql = insert_row_query_base_ + '(';
   for (vector<const vector<string>*>::const_iterator ri = rows.begin();
        ri != rows.end();
        ++ri) {
@@ -338,6 +342,40 @@ incline_driver_async_qtable::forwarder::replace_rows(incline_dbms* dbh,
   sql.erase(sql.size() - 2);
   mgr_->log_sql(sql);
   dbh->execute(sql);
+}
+
+void
+incline_driver_async_qtable::forwarder::update_rows(incline_dbms* dbh,
+						    const vector<const vector<string>*>& rows) const
+{
+  assert(! def_->npk_columns().empty());
+  for (vector<const vector<string>*>::const_iterator ri = rows.begin();
+       ri != rows.end();
+       ++ri) {
+    string sql = "UPDATE " + def_->destination() + " SET ";
+    vector<string>::size_type idx = 0;
+    for (map<string, string>::const_iterator ci = def_->npk_columns().begin();
+	 ci != def_->npk_columns().end();
+	 ++ci, ++idx) {
+      if (idx != 0) {
+	sql.push_back(',');
+      }
+      sql += ci->second + "='"
+	+ dbh->escape((**ri)[idx + def_->pk_columns().size()]) + '\'';
+    }
+    sql += " WHERE ";
+    idx = 0;
+    for (map<string, string>::const_iterator ci = def_->pk_columns().begin();
+	 ci != def_->pk_columns().end();
+	 ++ci, ++idx) {
+      if (idx != 0) {
+	sql += " AND ";
+      }
+      sql += ci->second +"='" + dbh->escape((**ri)[idx]) + '\'';
+    }
+    mgr_->log_sql(sql);
+    dbh->execute(sql);
+  }
 }
 
 void

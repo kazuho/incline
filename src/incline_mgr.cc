@@ -73,17 +73,8 @@ incline_mgr::create_trigger_all(bool drop_if_exists) const
   for (vector<string>::const_iterator sti = src_tables.begin();
        sti != src_tables.end();
        ++sti) {
-    if (drop_if_exists) {
-      incline_util::push_back(r, drop_trigger_of(*sti, "INSERT", true));
-    }
     incline_util::push_back(r, insert_trigger_of(*sti));
-    if (drop_if_exists) {
-      incline_util::push_back(r, drop_trigger_of(*sti, "UPDATE", true));
-    }
     incline_util::push_back(r, update_trigger_of(*sti));
-    if (drop_if_exists) {
-      incline_util::push_back(r, drop_trigger_of(*sti, "DELETE", true));
-    }
     incline_util::push_back(r, delete_trigger_of(*sti));
   }
   
@@ -131,7 +122,7 @@ incline_mgr::drop_trigger_of(const string& src_table, const string& event,
 {
   return
     incline_dbms::factory_->drop_trigger(_build_trigger_name(src_table, event),
-					 if_exists);
+					 src_table, if_exists);
 }
 
 vector<string>

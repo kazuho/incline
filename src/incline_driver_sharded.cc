@@ -235,7 +235,9 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
     bool use_transaction = true;
     if (slot.size() == 1) {
       fw_writer_call_t* req = slot.front()->request();
-      if (req->replace_rows_->empty() || req->delete_rows_->empty()) {
+      if ((! req->insert_rows_->empty()) + req->update_rows_->size()
+	  + (! req->delete_rows_->empty())
+	  < 1) {
 	use_transaction = false;
       }
     }
@@ -245,8 +247,11 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
       }
       for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
 	fw_writer_call_t* req = (*si)->request();
-	if (! req->replace_rows_->empty()) {
-	  req->forwarder_->replace_rows(dbh, *req->replace_rows_);
+	if (! req->insert_rows_->empty()) {
+	  req->forwarder_->insert_rows(dbh, *req->insert_rows_);
+	}
+	if (! req->update_rows_->empty()) {
+	  req->forwarder_->update_rows(dbh, *req->update_rows_);
 	}
 	if (! req->delete_rows_->empty()) {
 	  req->forwarder_->delete_rows(dbh, *req->delete_rows_);
@@ -294,10 +299,11 @@ incline_driver_sharded::forwarder::forwarder(forwarder_mgr* mgr,
 }
 
 bool
-incline_driver_sharded::forwarder::do_update_rows(const vector<const vector<string>*>& replace_rows, const vector<const vector<string>*>& delete_rows)
+incline_driver_sharded::forwarder::do_update_rows(const vector<const vector<string>*>& insert_rows, const vector<const vector<string>*>& update_rows, const vector<const vector<string>*>& delete_rows)
 {
   map<fw_writer*, fw_writer_call_t*> calls;
-  _setup_calls(calls, replace_rows, &fw_writer_call_t::replace_rows_);
+  _setup_calls(calls, insert_rows, &fw_writer_call_t::insert_rows_);
+  _setup_calls(calls, update_rows, &fw_writer_call_t::update_rows_);
   _setup_calls(calls, delete_rows, &fw_writer_call_t::delete_rows_);
   fw_writer::call(calls.begin(), calls.end());
   bool r = true;
@@ -307,7 +313,8 @@ incline_driver_sharded::forwarder::do_update_rows(const vector<const vector<stri
     if (! ci->second->success_) {
       r = false;
     }
-    delete ci->second->replace_rows_;
+    delete ci->second->insert_rows_;
+    delete ci->second->update_rows_;
     delete ci->second->delete_rows_;
     delete ci->second;
   }
@@ -348,6 +355,7 @@ incline_driver_sharded::forwarder::_setup_calls(map<fw_writer*, fw_writer_call_t
     } else {
       fw_writer_call_t* call
 	= new fw_writer_call_t(this, new vector<const vector<string>*>(),
+			       new vector<const vector<string>*>(),
 			       new vector<const vector<string>*>());
       (call->*target_rows)->push_back(*ri);
       calls.insert(ci, make_pair(writer, call));
