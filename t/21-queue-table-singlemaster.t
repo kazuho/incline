@@ -23,7 +23,7 @@ my $dbh = DBI->connect(
 ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")
     for qw/incline_cal incline_cal_member incline_cal_by_user/;
 ok(
-    $dbh->do('CREATE TABLE incline_cal (id INT UNSIGNED NOT NULL,at INT UNSIGNED NOT NULL,title VARCHAR(255) NOT NULL,PRIMARY KEY(id),KEY at(at)) ENGINE=InnoDB'),
+    $dbh->do('CREATE TABLE incline_cal (id INT UNSIGNED NOT NULL,at_time INT UNSIGNED NOT NULL,title VARCHAR(255) NOT NULL,PRIMARY KEY(id)) ENGINE=InnoDB'),
     'create cal table',
 );
 ok(
@@ -31,7 +31,7 @@ ok(
     'create cal_member table',
 );
 ok(
-    $dbh->do('CREATE TABLE incline_cal_by_user (_user_id INT UNSIGNED NOT NULL,_cal_id INT UNSIGNED NOT NULL,_at INT UNSIGNED NOT NULL,PRIMARY KEY(_user_id,_cal_id),KEY user_id_at_cal_id (_user_id,_at,_cal_id)) ENGINE=InnoDB'),
+    $dbh->do('CREATE TABLE incline_cal_by_user (_user_id INT UNSIGNED NOT NULL,_cal_id INT UNSIGNED NOT NULL,_at_time INT UNSIGNED NOT NULL,PRIMARY KEY(_user_id,_cal_id),KEY user_id_at_time_cal_id (_user_id,_at_time,_cal_id)) ENGINE=InnoDB'),
     'create cal_by_user table',
 );
 
@@ -67,12 +67,12 @@ ok(system(@incline_cmd, 'create-trigger') == 0, 'create queue');
     my $cmpf = sub {
         $waitf->();
         return (
-            $dbh->selectall_arrayref('SELECT user_id,cal_id,at FROM incline_cal INNER JOIN incline_cal_member ON incline_cal.id=incline_cal_member.cal_id ORDER BY user_id,cal_id'),
-            $dbh->selectall_arrayref('SELECT _user_id,_cal_id,_at FROM incline_cal_by_user ORDER BY _user_id,_cal_id'),
+            $dbh->selectall_arrayref('SELECT user_id,cal_id,at_time FROM incline_cal INNER JOIN incline_cal_member ON incline_cal.id=incline_cal_member.cal_id ORDER BY user_id,cal_id'),
+            $dbh->selectall_arrayref('SELECT _user_id,_cal_id,_at_time FROM incline_cal_by_user ORDER BY _user_id,_cal_id'),
         );
     };
     ok(
-        $dbh->do('INSERT INTO incline_cal (id,at,title) VALUES (1,999,"hello")'),
+        $dbh->do('INSERT INTO incline_cal (id,at_time,title) VALUES (1,999,"hello")'),
         'insert into cal',
     );
     ok(
@@ -81,7 +81,7 @@ ok(system(@incline_cmd, 'create-trigger') == 0, 'create queue');
     );
     is_deeply($cmpf->(), 'post insertion check');
     ok(
-        $dbh->do('UPDATE incline_cal SET at=at+1'),
+        $dbh->do('UPDATE incline_cal SET at_time=at_time+1'),
         'update dependent table',
     );
     is_deeply($cmpf->(), 'post deletion from master check');

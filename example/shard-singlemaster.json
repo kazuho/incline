@@ -7,7 +7,7 @@
       "incline_cal_member.cal_id"  : "_cal_id"
     },
     "npk_columns" : {
-      "incline_cal.at" : "_at"
+      "incline_cal.at_time" : "_at_time"
     },
     "merge"       : {
       "incline_cal.id" : "incline_cal_member.cal_id"

@@ -34,7 +34,7 @@ incline_pgsql::factory::create_trigger(const string& name, const string& event,
 {
   vector<string> r;
   r.push_back("CREATE FUNCTION " + name + "() RETURNS TRIGGER AS 'BEGIN\n"
-	      + funcbody + "RETURN NEW;\nEND" + "' language 'plpgsql'");
+	      + funcbody + "  RETURN NEW;\nEND" + "' language 'plpgsql'");
   r.push_back("CREATE TRIGGER " + name + ' ' + time + ' ' + event
 	      + " ON " + table + " FOR EACH ROW EXECUTE PROCEDURE " + name
 	      + "()");

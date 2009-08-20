@@ -31,9 +31,11 @@ incline_driver_standalone::update_trigger_of(const string& src_table) const
     const incline_def* def = *di;
     if (def->is_dependent_of(src_table)) {
       if (def->is_master_of(src_table)) {
-	incline_util::push_back(body,
-				_build_insert_from_def(def, src_table,
-						       "REPLACE"));
+	if (! def->npk_columns().empty()) {
+	  incline_util::push_back(body,
+				  _build_insert_from_def(def, src_table,
+							 "REPLACE"));
+	}
       } else {
 	incline_util::push_back(body,
 				_build_update_merge_from_def(def, src_table));

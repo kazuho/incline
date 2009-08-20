@@ -36,7 +36,7 @@ for my $db_node (@db_nodes) {
     ok($dbh[-1]->do("DROP TABLE IF EXISTS $_"), "drop $_")
         for qw/incline_cal incline_cal_member incline_cal_by_user/;
     ok(
-        $dbh[-1]->do('CREATE TABLE incline_cal (id INT UNSIGNED NOT NULL,at INT UNSIGNED NOT NULL,title VARCHAR(255) NOT NULL,PRIMARY KEY(id),KEY at(at)) ENGINE=InnoDB'),
+        $dbh[-1]->do('CREATE TABLE incline_cal (id INT UNSIGNED NOT NULL,at_time INT UNSIGNED NOT NULL,title VARCHAR(255) NOT NULL,PRIMARY KEY(id)) ENGINE=InnoDB'),
         'create cal table',
     );
     ok(
@@ -44,7 +44,7 @@ for my $db_node (@db_nodes) {
         'create cal_member table',
     );
     ok(
-        $dbh[-1]->do('CREATE TABLE incline_cal_by_user (_user_id INT UNSIGNED NOT NULL,_cal_id INT UNSIGNED NOT NULL,_at INT UNSIGNED NOT NULL,PRIMARY KEY(_user_id,_cal_id),KEY user_id_at_cal_id (_user_id,_at,_cal_id)) ENGINE=InnoDB'),
+        $dbh[-1]->do('CREATE TABLE incline_cal_by_user (_user_id INT UNSIGNED NOT NULL,_cal_id INT UNSIGNED NOT NULL,_at_time INT UNSIGNED NOT NULL,PRIMARY KEY(_user_id,_cal_id)) ENGINE=InnoDB'),
         'create cal_by_user table',
     );
     # load rules
@@ -90,12 +90,12 @@ for my $db_node (@db_nodes) {
     my $cmpf = sub {
         $waitf->();
         return (
-            $dbh[0]->selectall_arrayref('SELECT user_id,cal_id,at FROM incline_cal INNER JOIN incline_cal_member ON incline_cal.id=incline_cal_member.cal_id ORDER BY user_id,cal_id'),
-            $dbh[0]->selectall_arrayref('SELECT _user_id,_cal_id,_at FROM incline_cal_by_user ORDER BY _user_id,_cal_id'),
+            $dbh[0]->selectall_arrayref('SELECT user_id,cal_id,at_time FROM incline_cal INNER JOIN incline_cal_member ON incline_cal.id=incline_cal_member.cal_id ORDER BY user_id,cal_id'),
+            $dbh[0]->selectall_arrayref('SELECT _user_id,_cal_id,_at_time FROM incline_cal_by_user ORDER BY _user_id,_cal_id'),
         );
     };
     ok(
-        $dbh[0]->do('INSERT INTO incline_cal (id,at,title) VALUES (1,9,"hello")'),
+        $dbh[0]->do('INSERT INTO incline_cal (id,at_time,title) VALUES (1,9,"hello")'),
         'insert into cal',
     );
     ok(
@@ -104,7 +104,7 @@ for my $db_node (@db_nodes) {
     );
     is_deeply($cmpf->(), 'post insertion check');
     ok(
-        $dbh[0]->do('UPDATE incline_cal SET at=at+1'),
+        $dbh[0]->do('UPDATE incline_cal SET at_time=at_time+1'),
         'update dependent table',
     );
     is_deeply($cmpf->(), 'post deletion from master check');
@@ -127,7 +127,7 @@ ok(
 
 # check that changes sent to be a different node is not applied
 ok(
-    $dbh[0]->do('INSERT INTO incline_cal (id,at,title) VALUES (2,99,"ciao")'),
+    $dbh[0]->do('INSERT INTO incline_cal (id,at_time,title) VALUES (2,99,"ciao")'),
     'insert into cal',
 );
 ok(
@@ -177,12 +177,12 @@ is_deeply(
         $waitf->($target);
         return (
             $dbh[0]->selectall_arrayref(
-                'SELECT user_id,cal_id,at FROM incline_cal INNER JOIN incline_cal_member ON incline_cal.id=incline_cal_member.cal_id WHERE ?<=incline_cal_member.user_id AND incline_cal_member.user_id<? ORDER BY user_id,cal_id',
+                'SELECT user_id,cal_id,at_time FROM incline_cal INNER JOIN incline_cal_member ON incline_cal.id=incline_cal_member.cal_id WHERE ?<=incline_cal_member.user_id AND incline_cal_member.user_id<? ORDER BY user_id,cal_id',
                 {},
                 1000 * $target,
                 1000 * ($target + 1),
             ),
-            $dbh[$target]->selectall_arrayref('SELECT _user_id,_cal_id,_at FROM incline_cal_by_user ORDER BY _user_id,_cal_id'),
+            $dbh[$target]->selectall_arrayref('SELECT _user_id,_cal_id,_at_time FROM incline_cal_by_user ORDER BY _user_id,_cal_id'),
         );
     };
     is_deeply($cmpf->(1), 'post insertion check');
@@ -192,8 +192,8 @@ is_deeply(
     );
     is_deeply($cmpf->(1), 'post insertion check (1002)');
     ok(
-        $dbh[0]->do('UPDATE incline_cal SET at=at+1 WHERE id=2'),
-        'update cal.at',
+        $dbh[0]->do('UPDATE incline_cal SET at_time=at_time+1 WHERE id=2'),
+        'update cal.at_time',
     );
     is_deeply($cmpf->(1), 'post update check');
     ok(
@@ -206,7 +206,7 @@ is_deeply(
     $mysqld[2]->stop();
     ok(
         $dbh[0]->do(
-            'INSERT INTO incline_cal (id,at,title) VALUES (3,99,"hola")',
+            'INSERT INTO incline_cal (id,at_time,title) VALUES (3,99,"hola")',
         ),
         'insert into cal (partially down)',
     );
