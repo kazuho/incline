@@ -48,7 +48,7 @@ incline_driver_async::_build_insert_from_def(const incline_def* _def,
 							    action,
 							    &cond_and_dexpr));
       cond_and_dexpr.pop_back();
-      cond_and_dexpr.push_back("! (" +  direct_expr + ")");
+      cond_and_dexpr.push_back("NOT (" +  direct_expr + ")");
       incline_util::push_back(r,
 			      do_build_enqueue_insert_sql(def, src_table,
 							  action,
@@ -88,7 +88,7 @@ incline_driver_async::_build_delete_from_def(const incline_def* _def,
 			      super::_build_delete_from_def(def, src_table,
 							    cond));
       vector<string> cond_and_dexpr(cond);
-      cond_and_dexpr.push_back("! (" + do_build_direct_expr(de_col) + ')');
+      cond_and_dexpr.push_back("NOT (" + do_build_direct_expr(de_col) + ')');
       incline_util::push_back(r,
 			      do_build_enqueue_delete_sql(def, src_table,
 							  &cond_and_dexpr));
@@ -120,7 +120,7 @@ incline_driver_async::_build_update_merge_from_def(const incline_def* _def,
     cond_and_dexpr.pop_back();
     de_col = def->direct_expr_column(src_table, src_table);
     
-    cond_and_dexpr.push_back("! ("
+    cond_and_dexpr.push_back("NOT ("
 			     + do_build_direct_expr(def->direct_expr_column(src_table, src_table))
 			     + ')');
     incline_util::push_back(r, 

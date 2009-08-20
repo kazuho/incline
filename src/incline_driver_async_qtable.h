@@ -30,11 +30,11 @@ public:
     const incline_def_async_qtable* def() const { return def_; }
     void* run();
   protected:
-    virtual bool do_update_rows(const std::vector<const std::vector<std::string>*>& insert_rows, const std::vector<const std::vector<std::string>*>& update_rows, const std::vector<const std::vector<std::string>*>& delete_rows);
+    // should perform DELETE, then (INSERT|REPLACE)
+    virtual bool do_update_rows(const std::vector<const std::vector<std::string>*>& delete_rows, const std::vector<const std::vector<std::string>*>& insert_rows);
     virtual std::string do_get_extra_cond();
   protected:
     void insert_rows(incline_dbms* dbh, const std::vector<const std::vector<std::string>*>& rows) const;
-    void update_rows(incline_dbms* dbh, const std::vector<const std::vector<std::string>*>& rows) const;
     void delete_rows(incline_dbms* dbh, const std::vector<const std::vector<std::string>*>& rows) const;
   public:
     static std::vector<const std::vector<std::string>*> ____to_ptr_rows(const std::vector<std::vector<std::string> >& input) {

@@ -21,7 +21,7 @@ my $instance = InclineTest->create_any(
     },
 );
 
-plan tests => 19;
+plan tests => 21;
 
 my @incline_cmd = (
     qw(src/incline),
@@ -38,15 +38,15 @@ my $dbh = InclineTest->connect(
 ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")
     for qw/incline_cal incline_cal_member incline_cal_by_user/;
 ok(
-    $dbh->do('CREATE TABLE incline_cal (id INT UNSIGNED NOT NULL,at_time INT UNSIGNED NOT NULL,title VARCHAR(255) NOT NULL,PRIMARY KEY(id)) ENGINE=InnoDB'),
+    $dbh->do('CREATE TABLE incline_cal (id INT NOT NULL,at_time INT NOT NULL,title VARCHAR(255) NOT NULL,PRIMARY KEY(id))'),
     'create cal table',
 );
 ok(
-    $dbh->do('CREATE TABLE incline_cal_member (cal_id INT UNSIGNED NOT NULL,user_id INT UNSIGNED NOT NULL,PRIMARY KEY(cal_id,user_id)) ENGINE=InnoDB'),
+    $dbh->do('CREATE TABLE incline_cal_member (cal_id INT NOT NULL,user_id INT NOT NULL,PRIMARY KEY(cal_id,user_id))'),
     'create cal_member table',
 );
 ok(
-    $dbh->do('CREATE TABLE incline_cal_by_user (_user_id INT UNSIGNED NOT NULL,_cal_id INT UNSIGNED NOT NULL,_at_time INT UNSIGNED NOT NULL,PRIMARY KEY(_user_id,_cal_id),KEY user_id_at_time_cal_id (_user_id,_at_time,_cal_id)) ENGINE=InnoDB'),
+    $dbh->do('CREATE TABLE incline_cal_by_user (_user_id INT NOT NULL,_cal_id INT NOT NULL,_at_time INT NOT NULL,PRIMARY KEY(_user_id,_cal_id))'),
     'create cal_by_user table',
 );
 
@@ -87,7 +87,7 @@ ok(system(@incline_cmd, 'create-trigger') == 0, 'create queue');
         );
     };
     ok(
-        $dbh->do('INSERT INTO incline_cal (id,at_time,title) VALUES (1,999,"hello")'),
+        $dbh->do(q{INSERT INTO incline_cal (id,at_time,title) VALUES (1,999,'hello')}),
         'insert into cal',
     );
     ok(

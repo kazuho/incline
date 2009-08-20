@@ -224,8 +224,14 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
     }
     // connect to db if necessary
     if (dbh == NULL && (retry_at_ == 0 || retry_at_ <= time(NULL))) {
-      dbh = mgr_->connect(hostport_);
-      retry_at_ = 0;
+      try {
+	dbh = mgr_->connect(hostport_);
+	retry_at_ = 0;
+      } catch (incline_dbms::error_t& err) {
+	// failed to (re)connect
+	cerr << err.what() << endl;
+	retry_at_ = time(NULL) + 10;
+      }
     }
     if (dbh == NULL) {
       // not connected, return immediately
@@ -235,9 +241,7 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
     bool use_transaction = true;
     if (slot.size() == 1) {
       fw_writer_call_t* req = slot.front()->request();
-      if ((! req->insert_rows_->empty()) + req->update_rows_->size()
-	  + (! req->delete_rows_->empty())
-	  < 1) {
+      if (req->insert_rows_->empty() || req->delete_rows_->empty()) {
 	use_transaction = false;
       }
     }
@@ -247,14 +251,12 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
       }
       for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
 	fw_writer_call_t* req = (*si)->request();
-	if (! req->insert_rows_->empty()) {
-	  req->forwarder_->insert_rows(dbh, *req->insert_rows_);
-	}
-	if (! req->update_rows_->empty()) {
-	  req->forwarder_->update_rows(dbh, *req->update_rows_);
-	}
+	// the order: DELETE -> INSERT is requpired by driver_async_qtable
 	if (! req->delete_rows_->empty()) {
 	  req->forwarder_->delete_rows(dbh, *req->delete_rows_);
+	}
+	if (! req->insert_rows_->empty()) {
+	  req->forwarder_->insert_rows(dbh, *req->insert_rows_);
 	}
       }
       if (use_transaction) {
@@ -299,11 +301,10 @@ incline_driver_sharded::forwarder::forwarder(forwarder_mgr* mgr,
 }
 
 bool
-incline_driver_sharded::forwarder::do_update_rows(const vector<const vector<string>*>& insert_rows, const vector<const vector<string>*>& update_rows, const vector<const vector<string>*>& delete_rows)
+incline_driver_sharded::forwarder::do_update_rows(const vector<const vector<string>*>& delete_rows, const vector<const vector<string>*>& insert_rows)
 {
   map<fw_writer*, fw_writer_call_t*> calls;
   _setup_calls(calls, insert_rows, &fw_writer_call_t::insert_rows_);
-  _setup_calls(calls, update_rows, &fw_writer_call_t::update_rows_);
   _setup_calls(calls, delete_rows, &fw_writer_call_t::delete_rows_);
   fw_writer::call(calls.begin(), calls.end());
   bool r = true;
@@ -314,7 +315,6 @@ incline_driver_sharded::forwarder::do_update_rows(const vector<const vector<stri
       r = false;
     }
     delete ci->second->insert_rows_;
-    delete ci->second->update_rows_;
     delete ci->second->delete_rows_;
     delete ci->second;
   }

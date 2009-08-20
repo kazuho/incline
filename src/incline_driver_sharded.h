@@ -21,10 +21,9 @@ public:
   
   struct fw_writer_call_t {
     forwarder* forwarder_;
-    std::vector<const std::vector<std::string>*>* insert_rows_, *update_rows_,
-      * delete_rows_;
+    std::vector<const std::vector<std::string>*>* insert_rows_, * delete_rows_;
     bool success_;
-    fw_writer_call_t(forwarder* f, std::vector<const std::vector<std::string>*>* insert_rows, std::vector<const std::vector<std::string>*>* update_rows, std::vector<const std::vector<std::string>*>* delete_rows) : forwarder_(f), insert_rows_(insert_rows), update_rows_(update_rows), delete_rows_(delete_rows), success_(false) {}
+    fw_writer_call_t(forwarder* f, std::vector<const std::vector<std::string>*>* insert_rows, std::vector<const std::vector<std::string>*>* update_rows, std::vector<const std::vector<std::string>*>* delete_rows) : forwarder_(f), insert_rows_(insert_rows), delete_rows_(delete_rows), success_(false) {}
   };
   
   class fw_writer : public interthr_call_t<fw_writer, fw_writer_call_t> {
@@ -55,7 +54,7 @@ public:
     const incline_def_sharded* def() const {
       return static_cast<const incline_def_sharded*>(super::def());
     }
-    virtual bool do_update_rows(const std::vector<const std::vector<std::string>*>& insert_rows, const std::vector<const std::vector<std::string>*>& update_rows, const std::vector<const std::vector<std::string>*>& delete_rows);
+    virtual bool do_update_rows(const std::vector<const std::vector<std::string>*>& delete_rows, const std::vector<const std::vector<std::string>*>& insert_rows);
     virtual std::string do_get_extra_cond();
   protected:
     void _setup_calls(std::map<fw_writer*, fw_writer_call_t*>& calls, const std::vector<const std::vector<std::string>*>& rows, std::vector<const std::vector<std::string>*>* fw_writer_call_t::*target_rows);

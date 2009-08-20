@@ -243,7 +243,7 @@ void* incline_driver_async_qtable::forwarder::run()
       if (! extra_cond.empty()) {
 	last_id = iq_ids.back();
       }
-      vector<const vector<string>*> insert_rows, update_rows, delete_pks;
+      vector<const vector<string>*> insert_rows, delete_pks;
       // fill replace_rows and delete_rows
       // compile error gcc 4.0.1 (mac) when using const_reverse_iter
       for (vector<pair<char, vector<string> > >::reverse_iterator ri
@@ -259,21 +259,16 @@ void* incline_driver_async_qtable::forwarder::run()
 	      goto ROW_NOT_EQUAL;
 	    }
 	  }
-	  goto EQ_ROW_FOUND;
+	  // modif. of same pk exists
+	  goto ROW_CHECK_END;
 	ROW_NOT_EQUAL:
 	  ;
 	}
 	// row with same pk not exists, register it
 	switch (ri->first) {
 	case act_insert:
-	  insert_rows.push_back(&ri->second);
-	  break;
 	case act_update:
-	  if (incline_dbms::factory_->has_replace_into()) {
-	    insert_rows.push_back(&ri->second);
-	  } else {
-	    update_rows.push_back(&ri->second);
-	  }
+	  insert_rows.push_back(&ri->second);
 	  break;
 	case act_delete:
 	  delete_pks.push_back(&ri->second);
@@ -281,12 +276,21 @@ void* incline_driver_async_qtable::forwarder::run()
 	default:
 	  assert(0);
 	}
-      EQ_ROW_FOUND:
+      ROW_CHECK_END:
 	;
       }
+      // add pks of insert_rows to delete_pks, if no support for replace into
+      // it works since delete is performed before insert
+      if (! incline_dbms::factory_->has_replace_into()) {
+	for (vector<const vector<string>*>::const_iterator ri
+	       = insert_rows.begin();
+	     ri != insert_rows.end();
+	     ++ri) {
+	  delete_pks.push_back(*ri);
+	}
+      }
       // update and remove from queue if successful
-      // TODO
-      if (do_update_rows(insert_rows, update_rows, delete_pks)) {
+      if (do_update_rows(delete_pks, insert_rows)) {
 	dbh_->execute(clear_queue_query_base_ + '('
 		      + incline_util::join(',', iq_ids) + ')');
       }
@@ -301,16 +305,14 @@ void* incline_driver_async_qtable::forwarder::run()
 }
 
 bool
-incline_driver_async_qtable::forwarder::do_update_rows(const vector<const vector<string>*>& insert_rows, const vector<const vector<string>*>& update_rows, const vector<const vector<string>*>& delete_rows)
+incline_driver_async_qtable::forwarder::do_update_rows(const vector<const vector<string>*>& delete_rows, const vector<const vector<string>*>& insert_rows)
 {
-  if (! insert_rows.empty()) {
-    this->insert_rows(dbh_, insert_rows);
-  }
-  if (! update_rows.empty()) {
-    this->update_rows(dbh_, update_rows);
-  }
+  // the order: DELETE -> INSERT is a requirement, see above
   if (! delete_rows.empty()) {
     this->delete_rows(dbh_, delete_rows);
+  }
+  if (! insert_rows.empty()) {
+    this->insert_rows(dbh_, insert_rows);
   }
   return true;
 }
@@ -345,40 +347,6 @@ incline_driver_async_qtable::forwarder::insert_rows(incline_dbms* dbh,
 }
 
 void
-incline_driver_async_qtable::forwarder::update_rows(incline_dbms* dbh,
-						    const vector<const vector<string>*>& rows) const
-{
-  assert(! def_->npk_columns().empty());
-  for (vector<const vector<string>*>::const_iterator ri = rows.begin();
-       ri != rows.end();
-       ++ri) {
-    string sql = "UPDATE " + def_->destination() + " SET ";
-    vector<string>::size_type idx = 0;
-    for (map<string, string>::const_iterator ci = def_->npk_columns().begin();
-	 ci != def_->npk_columns().end();
-	 ++ci, ++idx) {
-      if (idx != 0) {
-	sql.push_back(',');
-      }
-      sql += ci->second + "='"
-	+ dbh->escape((**ri)[idx + def_->pk_columns().size()]) + '\'';
-    }
-    sql += " WHERE ";
-    idx = 0;
-    for (map<string, string>::const_iterator ci = def_->pk_columns().begin();
-	 ci != def_->pk_columns().end();
-	 ++ci, ++idx) {
-      if (idx != 0) {
-	sql += " AND ";
-      }
-      sql += ci->second +"='" + dbh->escape((**ri)[idx]) + '\'';
-    }
-    mgr_->log_sql(sql);
-    dbh->execute(sql);
-  }
-}
-
-void
 incline_driver_async_qtable::forwarder::delete_rows(incline_dbms* dbh,
 						    const vector<const vector<string>*>& pk_rows) const
 {
@@ -400,9 +368,9 @@ incline_driver_async_qtable::forwarder::_build_pk_cond(incline_dbms* dbh,
 						       const vector<string>&
 						       rows)
 {
-  assert(colnames.size() == rows.size());
+  assert(colnames.size() <= rows.size());
   vector<string> cond;
-  for (size_t i = 0; i < rows.size(); ++i) {
+  for (size_t i = 0; i < colnames.size(); ++i) {
     cond.push_back(colnames[i] + "='" + dbh->escape(rows[i]) + '\'');
   }
   return incline_util::join(" AND ", cond);
