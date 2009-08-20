@@ -45,7 +45,7 @@ ok(
 # load rules
 system(
     qw(src/incline),
-    "--rdbms", $ENV{TEST_DBMS},
+    "--rdbms=$ENV{TEST_DBMS}",
     qw(--source=example/single.json --port=19010 --database=test
        create-trigger),
 ) == 0 or die "src/incline failed: $?";
