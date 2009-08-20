@@ -210,7 +210,6 @@ void* incline_driver_async_qtable::forwarder::run()
       { // fetch data
 	string query = fetch_query_base_;
 	if (! extra_cond.empty()) {
-	  // TODO create and use index shard_key,_iq_id
 	  query += " WHERE " + extra_cond;
 	  if (! last_id.empty()) {
 	    query += " AND _iq_id>" + last_id;
