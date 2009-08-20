@@ -1,45 +1,67 @@
 use strict;
 use warnings;
 
+use lib qw(t);
+
 use DBI;
+use InclineTest;
 use Scope::Guard;
-use Test::mysqld;
+use Test::More;
 
-use Test::More tests => 47;
+# skip tests if dbms does not exist
+InclineTest->create_any(
+    mysqld => {
+        my_cnf => { 'skip-networking' => '' },
+    },
+    postgresql => {},
+);
 
-my @incline_cmd = qw(src/incline --mode=shard --source=example/shard-singlemaster.json --shard-source=example/shard-hash.json --rdbms=mysql --database=test);
+plan tests => 47;
+
+my @incline_cmd = (
+    qw(src/incline),
+    "--rdbms=$ENV{TEST_DBMS}",
+    qw(--mode=shard --source=example/shard-singlemaster.json),
+    qw(--shard-source=example/shard-hash.json --database=test),
+);
 my @db_nodes = qw/127.0.0.1:19010 127.0.0.1:19011/; # only use the first two
-my @mysqld;
+my @db;
 my @dbh;
 
 for my $db_node (@db_nodes) {
     my ($db_host, $db_port) = split /:/, $db_node, 2;
-    # start mysqld
-    push @mysqld, Test::mysqld->new(
-        my_cnf => {
-            'bind-address' => $db_host,
-            port           => $db_port,
+    # start db
+    push @db, InclineTest->create_any(
+        mysqld => {
+            my_cnf => {
+                'bind-address'           => $db_host,
+                port                     => $db_port,
+                'default-storage-engine' => 'INNODB',
+            },
+        },
+        postgresql => {
+            port => $db_port,
         },
     );
     # create tables
     push @dbh, do {
-        my $dbh = DBI->connect(
-            "dbi:mysql:test;user=root;host=$db_host;port=$db_port",
+        my $dbh = InclineTest->connect(
+            "DBI:any(PrintWarn=>0,RaiseError=>0):dbname=test;user=root;host=$db_host;port=$db_port",
         ) or die DBI->errstr;
         $dbh;
     };
     ok($dbh[-1]->do("DROP TABLE IF EXISTS $_"), "drop $_")
         for qw/incline_cal incline_cal_member incline_cal_by_user/;
     ok(
-        $dbh[-1]->do('CREATE TABLE incline_cal (id INT UNSIGNED NOT NULL,at_time INT UNSIGNED NOT NULL,title VARCHAR(255) NOT NULL,PRIMARY KEY(id)) ENGINE=InnoDB'),
+        $dbh[-1]->do('CREATE TABLE incline_cal (id INT NOT NULL,at_time INT NOT NULL,title VARCHAR(255) NOT NULL,PRIMARY KEY(id))'),
         'create cal table',
     );
     ok(
-        $dbh[-1]->do('CREATE TABLE incline_cal_member (cal_id INT UNSIGNED NOT NULL,user_id INT UNSIGNED NOT NULL,PRIMARY KEY(cal_id,user_id)) ENGINE=InnoDB'),
+        $dbh[-1]->do('CREATE TABLE incline_cal_member (cal_id INT NOT NULL,user_id INT NOT NULL,PRIMARY KEY(cal_id,user_id))'),
         'create cal_member table',
     );
     ok(
-        $dbh[-1]->do('CREATE TABLE incline_cal_by_user (_user_id INT UNSIGNED NOT NULL,_cal_id INT UNSIGNED NOT NULL,_at_time INT UNSIGNED NOT NULL,PRIMARY KEY(_user_id,_cal_id)) ENGINE=InnoDB'),
+        $dbh[-1]->do('CREATE TABLE incline_cal_by_user (_user_id INT NOT NULL,_cal_id INT NOT NULL,_at_time INT NOT NULL,PRIMARY KEY(_user_id,_cal_id))'),
         'create cal_by_user table',
     );
     # load rules
@@ -90,7 +112,7 @@ for my $db_node (@db_nodes) {
         );
     };
     ok(
-        $dbh[0]->do('INSERT INTO incline_cal (id,at_time,title) VALUES (1,9,"hello")'),
+        $dbh[0]->do(q{INSERT INTO incline_cal (id,at_time,title) VALUES (1,9,'hello')}),
         'insert into cal',
     );
     ok(
@@ -122,7 +144,7 @@ ok(
 
 # check that changes sent to be a different node is not applied
 ok(
-    $dbh[0]->do('INSERT INTO incline_cal (id,at_time,title) VALUES (2,99,"ciao")'),
+    $dbh[0]->do(q{INSERT INTO incline_cal (id,at_time,title) VALUES (2,99,'ciao')}),
     'insert into cal',
 );
 ok(
@@ -216,3 +238,5 @@ while (@dbh) {
     ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")
         for qw/incline_cal incline_cal_member incline_cal_by_user/;
 }
+
+1;
