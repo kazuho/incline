@@ -115,6 +115,9 @@ public:
   }
   std::string parse_shard_def(const picojson::value& def);
   const rule* rule() const { return rule_; }
+  std::pair<std::string, unsigned short> get_hostport() const {
+    return make_pair(cur_host_, cur_port_);
+  }
   std::string set_hostport(const std::string& host, unsigned short port);
 protected:
   virtual std::string do_build_direct_expr(const std::string& column_expr) const;

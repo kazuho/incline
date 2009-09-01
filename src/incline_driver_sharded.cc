@@ -475,7 +475,17 @@ incline_driver_sharded::forwarder_mgr::do_create_forwarder(const incline_def_asy
   const incline_def_sharded* def
     = dynamic_cast<const incline_def_sharded*>(_def);
   assert(def != NULL);
-  incline_dbms* dbh = incline_dbms::factory_->create();
+  vector<connect_params> all_cp = driver()->rule()->get_all_connect_params();
+  pair<string, unsigned short> cur_hostport = driver()->get_hostport();
+  incline_dbms* dbh = NULL;
+  for (vector<connect_params>::const_iterator i = all_cp.begin();
+       i != all_cp.end();
+       ++i) {
+    if (i->host == cur_hostport.first && i->port == cur_hostport.second) {
+      dbh = connect(*i);
+      break;
+    }
+  }
   assert(dbh != NULL);
   return new forwarder(this, def, dbh, poll_interval_);
 }
