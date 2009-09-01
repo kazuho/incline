@@ -104,8 +104,10 @@ protected:
   rule* rule_;
   std::string cur_host_;
   unsigned short cur_port_;
+  std::string shard_def_file_;
+  time_t mtime_of_shard_def_file_;
 public:
-  incline_driver_sharded() : rule_(NULL), cur_host_(), cur_port_() {}
+  incline_driver_sharded() : rule_(NULL), cur_host_(), cur_port_(), shard_def_file_(), mtime_of_shard_def_file_(0) {}
   virtual ~incline_driver_sharded() {
     delete rule_;
   }
@@ -113,7 +115,8 @@ public:
   virtual forwarder_mgr* create_forwarder_mgr(int poll_interval, int log_fd) {
     return new forwarder_mgr(this, poll_interval, log_fd);
   }
-  std::string parse_shard_def(const picojson::value& def);
+  virtual bool should_exit_loop() const;
+  std::string parse_shard_def(const std::string& shard_def_file);
   const rule* rule() const { return rule_; }
   std::pair<std::string, unsigned short> get_hostport() const {
     return make_pair(cur_host_, cur_port_);
@@ -121,6 +124,7 @@ public:
   std::string set_hostport(const std::string& host, unsigned short port);
 protected:
   virtual std::string do_build_direct_expr(const std::string& column_expr) const;
+  time_t _get_mtime_of_shard_def_file() const;
 };
 
 #endif

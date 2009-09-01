@@ -75,6 +75,7 @@ public:
   virtual forwarder_mgr* create_forwarder_mgr(int poll_interval, int log_fd) {
     return new forwarder_mgr(this, poll_interval, log_fd);
   }
+  virtual bool should_exit_loop() const { return false; }
 protected:
   std::string _create_table_of(const incline_def_async_qtable* def, const std::string& table_name, bool if_not_exists, incline_dbms* dbh) const;
   virtual std::vector<std::string> do_build_enqueue_insert_sql(const incline_def* def, const std::string& src_table, action_t action, const std::vector<std::string>* cond) const;

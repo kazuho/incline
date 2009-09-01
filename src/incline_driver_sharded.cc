@@ -1,5 +1,8 @@
+extern "C" {
+#include <sys/stat.h>
+}
 #include <cassert>
-#include <set>
+#include <fstream>
 #include <sstream>
 #include "start_thread.h"
 #include "incline_dbms.h"
@@ -232,14 +235,45 @@ incline_driver_sharded::create_def() const
   return new incline_def_sharded();
 }
 
-string
-incline_driver_sharded::parse_shard_def(const picojson::value& def)
+bool
+incline_driver_sharded::should_exit_loop() const
 {
-  if (! def.is<picojson::object>()) {
+  return mtime_of_shard_def_file_ != _get_mtime_of_shard_def_file();
+}
+
+string
+incline_driver_sharded::parse_shard_def(const string& shard_def_file)
+{
+  picojson::value shard_def;
+  
+  // read file
+  if (shard_def_file == "-") {
+    string err = picojson::parse(shard_def, cin);
+    if (! err.empty()) {
+      return err;
+    }
+  } else {
+    shard_def_file_ = shard_def_file;
+    if ((mtime_of_shard_def_file_ = _get_mtime_of_shard_def_file()) == 0) {
+      return "failed to obtain information of file:" + shard_def_file_;
+    }
+    ifstream fin;
+    fin.open(shard_def_file.c_str(), ios::in);
+    if (! fin.is_open()) {
+      return "failed to open file:" + shard_def_file;
+    }
+    string err = picojson::parse(shard_def, fin);
+    if (! err.empty()) {
+      return err;
+    }
+    fin.close();
+  }
+  // parse json
+  if (! shard_def.is<picojson::object>()) {
     return "definition should be ant object";
   }
   // get algorithm and build the rule
-  string algo = def.get("algorithm").to_str();
+  string algo = shard_def.get("algorithm").to_str();
 #define RANGE_ALGO(id, type) \
   if (algo == "range-" id) rule_ = new range_rule<type>()
   RANGE_ALGO("int", long long);
@@ -250,7 +284,7 @@ incline_driver_sharded::parse_shard_def(const picojson::value& def)
     return "unknown sharding algorithm: " + algo;
   }
   // build the rule
-  return rule_->parse(def);
+  return rule_->parse(shard_def);
 }
 
 string
@@ -496,4 +530,16 @@ incline_driver_sharded::forwarder_mgr::do_create_forwarder(const incline_def_asy
 #endif
   assert(dbh != NULL);
   return new forwarder(this, def, dbh, poll_interval_);
+}
+
+time_t
+incline_driver_sharded::_get_mtime_of_shard_def_file() const
+{
+  struct stat st;
+  if (shard_def_file_.empty()
+      || lstat(shard_def_file_.c_str(), &st) != 0) {
+    return 0;
+  }
+  assert(st.st_mtime != 0); // we use mtime==0 to indicate error, there's no way
+  return st.st_mtime;
 }

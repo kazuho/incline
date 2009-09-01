@@ -128,39 +128,21 @@ main(int argc, char** argv)
   
   // parse sharded_source
   if (*opt_mode == "shard") {
-    picojson::value shard_def;
-    string err;
     if (opt_shard_source->empty()) {
       cerr << "no --shard-source" << endl;
       exit(1);
-    } else if (*opt_shard_source == "-") {
-      err = picojson::parse(shard_def, cin);
-    } else {
-      ifstream fin;
-      fin.open(opt_shard_source->c_str(), ios::in);
-      if (! fin.is_open()) {
-	cerr << "failed to open file:" << *opt_shard_source << endl;
-	exit(2);
-      }
-      err = picojson::parse(shard_def, fin);
-      fin.close();
     }
-    if (err.empty()) {
-      err = shard_driver()->parse_shard_def(shard_def);
-    }
+    string err = shard_driver()->parse_shard_def(*opt_shard_source);
     if (! err.empty()) {
-      cerr << "failed to parse file:" << *opt_shard_source << ": " << err
-	   << endl;
+      cerr << err << endl;
       exit(3);
     }
-    {
-      pair<string, unsigned short>
-	hostport(incline_dbms::factory_->get_hostport());
-      err = shard_driver()->set_hostport(hostport.first, hostport.second);
-      if (! err.empty()) {
-	cerr << err << endl;
-	exit(3);
-      }
+    pair<string, unsigned short>
+      hostport(incline_dbms::factory_->get_hostport());
+    err = shard_driver()->set_hostport(hostport.first, hostport.second);
+    if (! err.empty()) {
+      cerr << err << endl;
+      exit(3);
     }
   }
   

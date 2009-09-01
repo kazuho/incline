@@ -196,7 +196,7 @@ void* incline_driver_async_qtable::forwarder::run()
 {
   string extra_cond, last_id;
   
-  while (1) {
+  while (! mgr_->driver()->should_exit_loop()) {
     try {
       vector<string> iq_ids;
       vector<pair<char, vector<string> > > rows;
