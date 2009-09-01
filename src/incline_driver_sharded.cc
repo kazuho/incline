@@ -475,6 +475,13 @@ incline_driver_sharded::forwarder_mgr::do_create_forwarder(const incline_def_asy
   const incline_def_sharded* def
     = dynamic_cast<const incline_def_sharded*>(_def);
   assert(def != NULL);
+#if 1
+  // use username and password supplied in command line, since pacific may
+  // disable write access under credentials defined by the client, but we still
+  // want to continue transferring the modifications until the queue tables
+  // become empty
+  incline_dbms* dbh = incline_dbms::factory_->create();
+#else
   vector<connect_params> all_cp = driver()->rule()->get_all_connect_params();
   pair<string, unsigned short> cur_hostport = driver()->get_hostport();
   incline_dbms* dbh = NULL;
@@ -486,6 +493,7 @@ incline_driver_sharded::forwarder_mgr::do_create_forwarder(const incline_def_asy
       break;
     }
   }
+#endif
   assert(dbh != NULL);
   return new forwarder(this, def, dbh, poll_interval_);
 }
