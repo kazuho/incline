@@ -10,7 +10,7 @@ public:
   struct factory : public super::factory {
     typedef super::factory super;
     virtual ~factory() {}
-    virtual incline_pgsql* create(const std::string& host, unsigned short port);
+    virtual incline_pgsql* create(const std::string& host, unsigned short port, const std::string& user, const std::string& password);
     virtual unsigned short default_port() const { return 5432; }
     virtual std::vector<std::string> create_trigger(const std::string& name, const std::string& event, const std::string& time, const std::string& table, const std::string& funcbody) const;
     virtual std::vector<std::string> drop_trigger(const std::string& name, const std::string& table, bool if_exists) const;
@@ -25,7 +25,7 @@ public:
   virtual void query(std::vector<std::vector<value_t> >& rows, const std::string& stmt);
  virtual std::string get_column_def(const std::string& table_name, const std::string& column_name);
 private:
-  incline_pgsql(const std::string& host, unsigned short port);
+ incline_pgsql(const std::string& host, unsigned short port, const std::string& user, const std::string& password);
   PGconn* _dbh();
 };
 

@@ -26,16 +26,14 @@ getoptpp::opt_str incline_dbms::opt_password_('p', "password", false,
 					       "database password", "");
 incline_dbms::factory* incline_dbms::factory_ = NULL;
 
-string
+pair<string, unsigned short>
 incline_dbms::factory::get_hostport() const
 {
   unsigned short port = *incline_dbms::opt_port_;
   if (port == 0) {
     port = default_port();
   }
-  stringstream ss;
-  ss << *incline_dbms::opt_host_ << ':' << port;
-  return ss.str();
+  return make_pair(*incline_dbms::opt_host_, port);
 }
 
 void

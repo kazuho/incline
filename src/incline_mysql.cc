@@ -5,12 +5,15 @@
 using namespace std;
 
 incline_mysql*
-incline_mysql::factory::create(const string& host, unsigned short port)
+incline_mysql::factory::create(const string& host, unsigned short port,
+			       const string& user, const string& password)
 {
   if (port == 0) {
     port = *opt_port_ == 0 ? default_port() : *opt_port_;
   }
-  return new incline_mysql(host.empty() ? *opt_host_ : host, port);
+  return new incline_mysql(host.empty() ? *opt_host_ : host, port,
+			   user.empty() ? *opt_user_ : user,
+			   password.empty() ? *opt_password_ : password);
 }
 
 vector<string>
@@ -112,9 +115,9 @@ incline_mysql::get_column_def(const string& table_name,
   return def;
 }
 
-incline_mysql::incline_mysql(const string& host, unsigned short port)
+incline_mysql::incline_mysql(const string& host, unsigned short port,
+			     const string& user, const string& password)
   : super(host, port), dbh_(NULL)
 {
-  dbh_ = new tmd::conn_t(host_, *opt_user_, *opt_password_, *opt_database_,
-			 port_);
+  dbh_ = new tmd::conn_t(host_, user, password, *opt_database_, port_);
 }

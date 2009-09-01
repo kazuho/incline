@@ -32,12 +32,15 @@ static string escape_quote(const string& src)
 }
 
 incline_pgsql*
-incline_pgsql::factory::create(const string& host, unsigned short port)
+incline_pgsql::factory::create(const string& host, unsigned short port,
+			       const string& user, const string& password)
 {
   if (port == 0) {
     port = *opt_port_ == 0 ? default_port() : *opt_port_;
   }
-  return new incline_pgsql(host.empty() ? *opt_host_ : host, port);
+  return new incline_pgsql(host.empty() ? *opt_host_ : host, port,
+			   user.empty() ? *opt_user_ : user,
+			   password.empty() ? *opt_password_ : password);
 }
 
 vector<string>
@@ -165,13 +168,13 @@ incline_pgsql::get_column_def(const string& table_name,
   return def;
 }
 
-incline_pgsql::incline_pgsql(const string& host, unsigned short port)
+incline_pgsql::incline_pgsql(const string& host, unsigned short port,
+			     const string& user, const string& password)
   : super(host, port), dbh_(NULL)
 {
   stringstream conninfo;
   conninfo << "host=" << host_ << " port=" << port_ << " dbname="
-	   << *opt_database_ << " user=" << *opt_user_ << " password="
-	   << *opt_password_;
+	   << *opt_database_ << " user=" << user << " password=" << password;
   dbh_ = PQconnectdb(conninfo.str().c_str());
   assert(dbh_ != NULL);
   if (PQstatus(dbh_) != CONNECTION_OK) {

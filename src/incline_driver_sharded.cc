@@ -1,5 +1,6 @@
 #include <cassert>
 #include <set>
+#include <sstream>
 #include "start_thread.h"
 #include "incline_dbms.h"
 #include "incline_def_sharded.h"
@@ -51,7 +52,8 @@ namespace incline_driver_sharded_ns {
   template <typename KEYTYPE> class range_rule
     : public incline_driver_sharded::rule {
   protected:
-    map<KEYTYPE, string> lb_hostport_; // lower_bound => hostport
+    // lower_bound => hostport
+    map<KEYTYPE, incline_driver_sharded::connect_params> lb_connect_params_;
   public:
     virtual string parse(const picojson::value& def) {
       const picojson::value& map = def.get("map");
@@ -62,38 +64,56 @@ namespace incline_driver_sharded_ns {
 	     = map.get<picojson::object>().begin();
 	   mi != map.get<picojson::object>().end();
 	   ++mi) {
-    	lb_hostport_[str_to_key_type<KEYTYPE>()(mi->first)]
-	  = mi->second.to_str();
+	incline_driver_sharded::connect_params params;
+	string err = params.parse(mi->second);
+	if (! err.empty()) {
+	  return err;
+	}
+	lb_connect_params_[str_to_key_type<KEYTYPE>()(mi->first)] = params;
       }
       return string();
     }
-    virtual vector<string> get_all_hostport() const {
-      set<string> rs;
-      for (typename map<KEYTYPE, string>::const_iterator i
-	     = lb_hostport_.begin();
-	   i != lb_hostport_.end();
+    virtual vector<incline_driver_sharded::connect_params>
+    get_all_connect_params() const {
+      vector<incline_driver_sharded::connect_params> r;
+      for (typename map<KEYTYPE, incline_driver_sharded::connect_params>
+	     ::const_iterator i = lb_connect_params_.begin();
+	   i != lb_connect_params_.end();
 	   ++i) {
-	rs.insert(i->second);
+	for (vector<incline_driver_sharded::connect_params>::const_iterator ri
+	       = r.begin();
+	     ri != r.end();
+	     ++ri) {
+	  if (ri->host == i->second.host && ri->port == i->second.port) {
+	    goto ON_FOUND;
+	  }
+	}
+	r.push_back(i->second);
+      ON_FOUND:
+	;
       }
-      vector<string> r;
-      copy(rs.begin(), rs.end(), back_inserter(r));
       return r;
     }
-    virtual string get_hostport_for(const string& key) const {
-      typename map<KEYTYPE, string>::const_iterator i
-	= lb_hostport_.upper_bound(str_to_key_type<KEYTYPE>()(key));
-      return i == lb_hostport_.begin() ? string() : (--i)->second;
+    virtual incline_driver_sharded::connect_params
+    get_connect_params_for(const string& key) const {
+      typename map<KEYTYPE, incline_driver_sharded::connect_params>
+	::const_iterator i
+	= lb_connect_params_.upper_bound(str_to_key_type<KEYTYPE>()(key));
+      return i == lb_connect_params_.begin()
+	? incline_driver_sharded::connect_params() : (--i)->second;
     }
-    virtual string build_expr_for(const string& column_expr,
-				  const string& hostport) const {
-      typename map<KEYTYPE, string>::const_iterator i;
+    virtual string build_expr_for(const string& column_expr, const string& host,
+				  unsigned short port) const {
       vector<string> cond;
-      for (i = lb_hostport_.begin(); i != lb_hostport_.end(); ++i) {
-	if (i->second == hostport) {
+      for (typename map<KEYTYPE, incline_driver_sharded::connect_params>
+	     ::const_iterator i = lb_connect_params_.begin();
+	   i != lb_connect_params_.end();
+	   ++i) {
+	if (i->second.host == host && i->second.port == port) {
 	  cond.push_back('(' + key_type_to_str<KEYTYPE>()(i->first) + "<="
 			 + column_expr);
 	  ++i;
-	  if (i != lb_hostport_.end()) {
+	  if (i != lb_connect_params_.end()) {
 	    cond.back() += " AND " + column_expr + '<'
 	      + key_type_to_str<KEYTYPE>()(i->first);
 	  }
@@ -108,7 +128,8 @@ namespace incline_driver_sharded_ns {
   
   class hash_int_rule : public incline_driver_sharded::rule {
   protected:
-    vector<string> hostport_; // hostport_[key % hostport_.size()]
+    // connect_params_[key % connect_params_.size()]
+    vector<incline_driver_sharded::connect_params> connect_params_;
   public:
     virtual string parse(const picojson::value& def) {
       if (! def.get("num").is<double>()) {
@@ -122,34 +143,53 @@ namespace incline_driver_sharded_ns {
 	     = nodes.get<picojson::array>().begin();
 	   ni != nodes.get<picojson::array>().end();
 	   ++ni) {
-	hostport_.push_back(ni->to_str());
+	incline_driver_sharded::connect_params params;
+	string err = params.parse(*ni);
+	if (! err.empty()) {
+	  return err;
+	}
+	connect_params_.push_back(params);
       }
-      if (def.get("num").get<double>() != hostport_.size()) {
+      if (def.get("num").get<double>() != connect_params_.size()) {
 	return "number of nodes does not match the value specified in ``num'' field";
       }
       return string();
     }
-    virtual vector<string> get_all_hostport() const {
-      set<string> rs;
-      for (vector<string>::const_iterator hi = hostport_.begin();
-	   hi != hostport_.end();
+    virtual vector<incline_driver_sharded::connect_params>
+    get_all_connect_params() const {
+      vector<incline_driver_sharded::connect_params> r;
+      for (vector<incline_driver_sharded::connect_params>::const_iterator hi
+	     = connect_params_.begin();
+	   hi != connect_params_.end();
 	   ++hi) {
-	rs.insert(*hi);
+	for (vector<incline_driver_sharded::connect_params>::const_iterator ri
+	       = r.begin();
+	     ri != r.end();
+	     ++ri) {
+	  if (ri->host == hi->host && ri->port == hi->port) {
+	    goto ON_FOUND;
+	  }
+	}
+	r.push_back(*hi);
+      ON_FOUND:
+	;
       }
-      vector<string> r;
-      copy(rs.begin(), rs.end(), back_inserter(r));
       return r;
     }
-    virtual string get_hostport_for(const string& key) const {
-      return hostport_[str_to_key_type<long long>()(key) % hostport_.size()];
+    virtual incline_driver_sharded::connect_params
+    get_connect_params_for(const string& key) const {
+      return connect_params_[str_to_key_type<long long>()(key)
+			     % connect_params_.size()];
     }
-    virtual string build_expr_for(const string& column_expr,
-				  const string& hostport) const {
+    virtual string build_expr_for(const string& column_expr, const string& host,
+				  unsigned short port) const {
       vector<string> cond;
-      for (unsigned i = 0; i < hostport_.size(); ++i) {
-	if (hostport_[i] == hostport) {
+      for (unsigned i = 0; i < connect_params_.size(); ++i) {
+	if (connect_params_[i].host == host
+	    && connect_params_[i].port == port) {
 	  char modulo_str[sizeof("%-9223372036854775808=-2147483648)")];
-	  sprintf(modulo_str, "%%%lld=%u)", (long long)hostport_.size(), i);
+	  sprintf(modulo_str, "%%%lld=%u)", (long long)connect_params_.size(),
+		  i);
 	  cond.push_back('(' + column_expr + modulo_str);
 	}
       }
@@ -161,6 +201,30 @@ namespace incline_driver_sharded_ns {
 }
 
 using namespace incline_driver_sharded_ns;
+
+string
+incline_driver_sharded::connect_params::parse(const picojson::value& _def)
+{
+  const picojson::value& def(_def.is<picojson::array>() ? _def.get(0) : _def);
+  if (! def.is<picojson::object>()) {
+    return "connection information is not an object";
+  }
+  const picojson::value::object& defobj(def.get<picojson::value::object>());
+  picojson::value::object::const_iterator vi;
+#define COPY_IF_TYPE(val, type)			  \
+  if ((vi = defobj.find(#val)) != defobj.end()) { \
+    if (! vi->second.is<type>()) {		  \
+      return #val " is not a " #type;		  \
+    }						  \
+    val = vi->second.get<type>();	     	  \
+  }
+  COPY_IF_TYPE(host, string);
+  COPY_IF_TYPE(port, double);
+  COPY_IF_TYPE(username, string);
+  COPY_IF_TYPE(password, string);
+#undef COPY_IF_TYPE
+  return string();
+}
 
 incline_def*
 incline_driver_sharded::create_def() const
@@ -190,25 +254,29 @@ incline_driver_sharded::parse_shard_def(const picojson::value& def)
 }
 
 string
-incline_driver_sharded::set_hostport(const string& hostport)
+incline_driver_sharded::set_hostport(const string& host, unsigned short port)
 {
-  vector<string> all_hp = rule_->get_all_hostport();
-  for (vector<string>::const_iterator i = all_hp.begin();
-       i != all_hp.end();
+  vector<connect_params> all_cp = rule_->get_all_connect_params();
+  for (vector<connect_params>::const_iterator i = all_cp.begin();
+       i != all_cp.end();
        ++i) {
-    if (*i == hostport) {
-      cur_hostport_ = hostport;
+    if (i->host == host && i->port == port) {
+      cur_host_ = host;
+      cur_port_ = port;
       return string();
     }
   }
   // not found
-  return "specified database does not exist in shard definition:" + hostport;
+  stringstream ss;
+  ss << "specified database does not exist in shard definition:" << host << ':'
+     << port;
+  return ss.str();
 }
 
 string
 incline_driver_sharded::do_build_direct_expr(const string& column_expr) const
 {
-  return rule_->build_expr_for(column_expr, cur_hostport_);
+  return rule_->build_expr_for(column_expr, cur_host_, cur_port_);
 }
 
 void*
@@ -225,7 +293,7 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
     // connect to db if necessary
     if (dbh == NULL && (retry_at_ == 0 || retry_at_ <= time(NULL))) {
       try {
-	dbh = mgr_->connect(hostport_);
+	dbh = mgr_->connect(connect_params_);
 	retry_at_ = 0;
       } catch (incline_dbms::error_t& err) {
 	// failed to (re)connect
@@ -325,14 +393,16 @@ string
 incline_driver_sharded::forwarder::do_get_extra_cond()
 {
   vector<string> cond;
-  const map<string, fw_writer*>& writers(mgr()->writers());
+  const vector<pair<connect_params, fw_writer*> >& writers(mgr()->writers());
   bool has_inactive = false;
-  for (map<string, fw_writer*>::const_iterator wi = writers.begin();
+  for (vector<pair<connect_params, fw_writer*> >::const_iterator wi
+	 = writers.begin();
        wi != writers.end();
        ++wi) {
     if (wi->second->is_active()) {
       cond.push_back(mgr()->driver()->rule()
-		     ->build_expr_for(def()->direct_expr_column(), wi->first));
+		     ->build_expr_for(def()->direct_expr_column(),
+				      wi->first.host, wi->first.port));
     } else {
       has_inactive = true;
     }
@@ -369,13 +439,14 @@ incline_driver_sharded::forwarder_mgr::run()
   vector<pthread_t> threads;
   
   { // create writers and start
-    vector<string> all_hostport(driver()->rule()->get_all_hostport());
-    for (vector<string>::const_iterator hi = all_hostport.begin();
+    vector<connect_params>
+      all_hostport(driver()->rule()->get_all_connect_params());
+    for (vector<connect_params>::const_iterator hi = all_hostport.begin();
 	 hi != all_hostport.end();
 	 ++hi) {
       fw_writer* writer = new fw_writer(this, *hi);
       threads.push_back(start_thread(writer, 0));
-      writers_[*hi] = writer;
+      writers_.push_back(make_pair(*hi, writer));
     }
   }
 
@@ -392,14 +463,10 @@ incline_driver_sharded::forwarder_mgr::run()
 }
 
 incline_dbms*
-incline_driver_sharded::forwarder_mgr::connect(const string& hostport)
+incline_driver_sharded::forwarder_mgr::connect(const connect_params& cp)
 {
-  unsigned short port = 0;
-  string::size_type colon_at = hostport.find(':');
-  assert(colon_at != string::npos);
-  sscanf(hostport.c_str() + colon_at + 1, "%hu", &port);
-  return incline_dbms::factory_->create(hostport.substr(0, colon_at).c_str(),
-					port);
+  return incline_dbms::factory_->create(cp.host, cp.port, cp.username,
+					cp.password);
 }
 
 incline_driver_sharded::forwarder*

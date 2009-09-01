@@ -154,8 +154,9 @@ main(int argc, char** argv)
       exit(3);
     }
     {
-      err
-	= shard_driver()->set_hostport(incline_dbms::factory_->get_hostport());
+      pair<string, unsigned short>
+	hostport(incline_dbms::factory_->get_hostport());
+      err = shard_driver()->set_hostport(hostport.first, hostport.second);
       if (! err.empty()) {
 	cerr << err << endl;
 	exit(3);

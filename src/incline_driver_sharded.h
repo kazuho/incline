@@ -8,12 +8,21 @@ class incline_driver_sharded : public incline_driver_async_qtable {
 public:
   typedef incline_driver_async_qtable super;
   
+  struct connect_params {
+    std::string host;
+    unsigned short port;
+    std::string username;
+    std::string password;
+    connect_params() : host(), port(), username(), password() {}
+    std::string parse(const picojson::value& def);
+  };
+  
   struct rule {
     virtual ~rule() {}
     virtual std::string parse(const picojson::value& def) = 0;
-    virtual std::vector<std::string> get_all_hostport() const = 0;
-    virtual std::string get_hostport_for(const std::string& key) const = 0;
-    virtual std::string build_expr_for(const std::string& column_expr, const std::string& hostport) const = 0;
+    virtual std::vector<connect_params> get_all_connect_params() const = 0;
+    virtual connect_params get_connect_params_for(const std::string& key) const = 0;
+    virtual std::string build_expr_for(const std::string& column_expr, const std::string& host, unsigned short port) const = 0;
   };
   
   class forwarder;
@@ -29,10 +38,10 @@ public:
   class fw_writer : public interthr_call_t<fw_writer, fw_writer_call_t> {
   protected:
     forwarder_mgr* mgr_;
-    std::string hostport_;
+    connect_params connect_params_;
     time_t retry_at_;
   public:
-    fw_writer(forwarder_mgr* mgr, const std::string& hostport) : mgr_(mgr), hostport_(hostport), retry_at_(0) {}
+  fw_writer(forwarder_mgr* mgr, const connect_params& cp) : mgr_(mgr), connect_params_(cp), retry_at_(0) {}
     bool is_active() const {
       return retry_at_ == 0 || retry_at_ <= time(NULL);
     }
@@ -64,31 +73,39 @@ public:
   public:
     typedef incline_driver_async_qtable::forwarder_mgr super;
   protected:
-    std::map<std::string, fw_writer*> writers_;
+    std::vector<std::pair<connect_params, fw_writer*> > writers_;
   public:
-    forwarder_mgr(incline_driver_sharded* driver, int poll_interval, int log_fd) : super(driver, poll_interval, log_fd) {}
+    forwarder_mgr(incline_driver_sharded* driver, int poll_interval, int log_fd) : super(driver, poll_interval, log_fd), writers_() {}
+    const std::vector<std::pair<connect_params, fw_writer*> > writers() const {
+      return writers_;
+    }
     const incline_driver_sharded* driver() const {
       return static_cast<const incline_driver_sharded*>(super::driver());
     }
-    const std::map<std::string, fw_writer*> writers() { return writers_; }
     fw_writer* get_writer_for(const std::string& key) const {
-      std::string hostport = driver()->rule()->get_hostport_for(key);
-      std::map<std::string, fw_writer*>::const_iterator wi
-	= writers_.find(hostport);
-      assert(wi != writers_.end());
-      return wi->second;
+      connect_params cp = driver()->rule()->get_connect_params_for(key);
+      for (std::vector<std::pair<connect_params, fw_writer*> >::const_iterator
+	     wi = writers_.begin();
+	   wi != writers_.end();
+	   ++wi) {
+	if (wi->first.host == cp.host && wi->first.port == cp.port) {
+	  return wi->second;
+	}
+      }
+      assert(0);
     }
     virtual void* run();
-    incline_dbms* connect(const std::string& hostport);
+    incline_dbms* connect(const connect_params& cp);
   protected:
     virtual forwarder* do_create_forwarder(const incline_def_async_qtable* def);
   };
   
 protected:
   rule* rule_;
-  std::string cur_hostport_;
+  std::string cur_host_;
+  unsigned short cur_port_;
 public:
-  incline_driver_sharded() : rule_(NULL), cur_hostport_() {}
+  incline_driver_sharded() : rule_(NULL), cur_host_(), cur_port_() {}
   virtual ~incline_driver_sharded() {
     delete rule_;
   }
@@ -98,7 +115,7 @@ public:
   }
   std::string parse_shard_def(const picojson::value& def);
   const rule* rule() const { return rule_; }
-  std::string set_hostport(const std::string& hostport);
+  std::string set_hostport(const std::string& host, unsigned short port);
 protected:
   virtual std::string do_build_direct_expr(const std::string& column_expr) const;
 };
