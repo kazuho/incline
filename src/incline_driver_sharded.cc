@@ -238,7 +238,11 @@ incline_driver_sharded::create_def() const
 bool
 incline_driver_sharded::should_exit_loop() const
 {
-  return mtime_of_shard_def_file_ != _get_mtime_of_shard_def_file();
+  if (mtime_of_shard_def_file_ != _get_mtime_of_shard_def_file()) {
+    cerr << "detected update of shard definition file, exitting..." << endl;
+    return true;
+  }
+  return false;
 }
 
 string
@@ -484,10 +488,16 @@ incline_driver_sharded::forwarder_mgr::run()
     }
   }
 
-  // supre
+  // super
   super::run();
   
-  // loop
+  // stop writers and exit
+  for (vector<pair<connect_params, fw_writer*> >::iterator wi
+	 = writers_.begin();
+       wi != writers_.end();
+       ++wi) {
+    wi->second->terminate();
+  }
   while (! threads.empty()) {
     pthread_join(threads.back(), NULL);
     threads.pop_back();
