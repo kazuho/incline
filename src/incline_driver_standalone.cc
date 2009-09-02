@@ -88,6 +88,32 @@ incline_driver_standalone::_build_delete_from_def(const incline_def* def,
 		     + pi->first.substr(src_table.size() + 1));
     }
   }
+  for (vector<pair<string, string> >::const_iterator mi
+	 = def->merge().begin();
+       mi != def->merge().end();
+       ++mi) {
+    string old_col, alias_col;
+    if (incline_def::table_of_column(mi->first) == src_table) {
+      old_col = mi->first;
+      alias_col = mi->second;
+    } else if (incline_def::table_of_column(mi->second) == src_table) {
+      old_col = mi->second;
+      alias_col = mi->first;
+    }
+    if (! old_col.empty() && alias_col != src_table) {
+      map<string, string>::const_iterator ci
+	= def->pk_columns().find(alias_col);
+      if (ci != def->pk_columns().end()) {
+	cond.push_back(ci->second + "=OLD."
+		       + old_col.substr(src_table.size() + 1));
+      } else {
+	// either column used in relation definition should exist in pk_columns,
+	// at least for now...
+	assert(def->pk_columns().find(old_col) != def->pk_columns().end());
+      }
+    }
+  }
+  
   string sql = "DELETE FROM " + def->destination() + " WHERE "
     + incline_util::join(" AND ", cond);
   return incline_util::vectorize(sql);
