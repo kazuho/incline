@@ -1,6 +1,6 @@
 #include <sstream>
+#include "incline_util.h"
 #include "incline_pgsql.h"
-#include "tmd.h"
 
 using namespace std;
 
@@ -78,6 +78,14 @@ incline_pgsql::factory::create_queue_table(const string& table_name,
   return string("CREATE TABLE ") + (if_not_exists ? "IF NOT EXISTS " : "")
     + table_name + " (_iq_id SERIAL,_iq_action CHAR(1) NOT NULL," + column_defs
     + ",PRIMARY KEY (_iq_id))";
+}
+
+string
+incline_pgsql::factory::delete_using(const string& table_name,
+				     const vector<string>& using_list) const
+{
+  return "DELETE FROM " + table_name + " USING "
+    + incline_util::join(',', using_list);
 }
 
 incline_pgsql::~incline_pgsql()

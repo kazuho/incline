@@ -102,12 +102,12 @@ incline_driver_standalone::_build_delete_from_def(const incline_def* def,
     }
   }
   if (use_join) {
-    sql = "DELETE FROM " + def->destination() + " USING " + def->destination();
+    vector<string> using_list;
     for (vector<string>::const_iterator si = def->source().begin();
 	 si != def->source().end();
 	 ++si) {
       if (*si != src_table && def->is_master_of(*si)) {
-	sql += " INNER JOIN " + *si;
+	using_list.push_back(*si);
 	for (map<string, string>::const_iterator pi = def->pk_columns().begin();
 	     pi != def->pk_columns().end();
 	     ++pi) {
@@ -120,7 +120,8 @@ incline_driver_standalone::_build_delete_from_def(const incline_def* def,
     }
     incline_util::push_back(cond,
 			    def->build_merge_cond(src_table, "OLD", true));
-    sql += " WHERE " + incline_util::join(" AND ", cond);
+    sql = incline_dbms::factory_->delete_using(def->destination(), using_list)
+      + " WHERE " + incline_util::join(" AND ", cond);
   } else {
     for (vector<pair<string, string> >::const_iterator mi
 	   = def->merge().begin();

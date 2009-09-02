@@ -26,6 +26,15 @@ incline_mysql::factory::create_trigger(const string& name, const string& event,
   return incline_util::vectorize(r);
 }
 
+vector<string>
+incline_mysql::factory::drop_trigger(const string& name, const string& table,
+				    bool if_exists) const
+{
+  return
+    incline_util::vectorize(string("DROP TRIGGER ")
+			    + (if_exists ? "IF EXISTS " : "") + name);
+}
+
 string
 incline_mysql::factory::create_queue_table(const string& table_name,
 					   const string& column_defs,
@@ -37,13 +46,17 @@ incline_mysql::factory::create_queue_table(const string& table_name,
     + ",PRIMARY KEY (_iq_id))";
 }
 
-vector<string>
-incline_mysql::factory::drop_trigger(const string& name, const string& table,
-				    bool if_exists) const
+string
+incline_mysql::factory::delete_using(const string& table_name,
+				     const vector<string>& using_list) const
 {
-  return
-    incline_util::vectorize(string("DROP TRIGGER ")
-			    + (if_exists ? "IF EXISTS " : "") + name);
+  string sql = "DELETE FROM " + table_name + " USING " + table_name;
+  for (vector<string>::const_iterator ui = using_list.begin();
+       ui != using_list.end();
+       ++ui) {
+    sql += " INNER JOIN " + *ui;
+  }
+  return sql;
 }
 
 incline_mysql::~incline_mysql()
