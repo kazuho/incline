@@ -80,42 +80,73 @@ incline_driver_standalone::_build_delete_from_def(const incline_def* def,
   const 
 {
   vector<string> cond(_cond);
+  string sql;
+  bool use_join = false;
+  
+  for (vector<pair<string, string> >::const_iterator mi = def->merge().begin();
+       mi != def->merge().end();
+       ++mi) {
+    if (def->pk_columns().find(mi->first) == def->pk_columns().end()
+	&& def->pk_columns().find(mi->second) == def->pk_columns().end()) {
+      use_join = true;
+      break;
+    }
+  }
+  
   for (map<string, string>::const_iterator pi = def->pk_columns().begin();
        pi != def->pk_columns().end();
        ++pi) {
     if (incline_def::table_of_column(pi->first) == src_table) {
-      cond.push_back(pi->second + "=OLD."
+      cond.push_back(def->destination() + '.' + pi->second + "=OLD."
 		     + pi->first.substr(src_table.size() + 1));
     }
   }
-  for (vector<pair<string, string> >::const_iterator mi
-	 = def->merge().begin();
-       mi != def->merge().end();
-       ++mi) {
-    string old_col, alias_col;
-    if (incline_def::table_of_column(mi->first) == src_table) {
-      old_col = mi->first;
-      alias_col = mi->second;
-    } else if (incline_def::table_of_column(mi->second) == src_table) {
-      old_col = mi->second;
-      alias_col = mi->first;
-    }
-    if (! old_col.empty() && alias_col != src_table) {
-      map<string, string>::const_iterator ci
-	= def->pk_columns().find(alias_col);
-      if (ci != def->pk_columns().end()) {
-	cond.push_back(ci->second + "=OLD."
-		       + old_col.substr(src_table.size() + 1));
-      } else {
-	// either column used in relation definition should exist in pk_columns,
-	// at least for now...
-	assert(def->pk_columns().find(old_col) != def->pk_columns().end());
+  if (use_join) {
+    sql = "DELETE FROM " + def->destination() + " USING " + def->destination();
+    for (vector<string>::const_iterator si = def->source().begin();
+	 si != def->source().end();
+	 ++si) {
+      if (*si != src_table && def->is_master_of(*si)) {
+	sql += " INNER JOIN " + *si;
+	for (map<string, string>::const_iterator pi = def->pk_columns().begin();
+	     pi != def->pk_columns().end();
+	     ++pi) {
+	  if (incline_def::table_of_column(pi->first) == *si) {
+	    cond.push_back(def->destination() + '.' + pi->second + '='
+			   + pi->first);
+	  }
+	}
       }
     }
+    incline_util::push_back(cond,
+			    def->build_merge_cond(src_table, "OLD", true));
+    sql += " WHERE " + incline_util::join(" AND ", cond);
+  } else {
+    for (vector<pair<string, string> >::const_iterator mi
+	   = def->merge().begin();
+	 mi != def->merge().end();
+	 ++mi) {
+      string old_col, alias_col;
+      if (incline_def::table_of_column(mi->first) == src_table) {
+	old_col = mi->first;
+	alias_col = mi->second;
+      } else if (incline_def::table_of_column(mi->second) == src_table) {
+	old_col = mi->second;
+	alias_col = mi->first;
+      }
+      if (! old_col.empty()
+	  && def->pk_columns().find(old_col) == def->pk_columns().end()) {
+	map<string, string>::const_iterator ci
+	  = def->pk_columns().find(alias_col);
+	assert(ci != def->pk_columns().end());
+	cond.push_back(ci->second + "=OLD."
+		       + old_col.substr(src_table.size() + 1));
+      }
+    }
+    sql = "DELETE FROM " + def->destination() + " WHERE "
+      + incline_util::join(" AND ", cond);
   }
   
-  string sql = "DELETE FROM " + def->destination() + " WHERE "
-    + incline_util::join(" AND ", cond);
   return incline_util::vectorize(sql);
 }
 
