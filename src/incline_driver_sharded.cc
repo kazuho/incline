@@ -214,17 +214,17 @@ incline_driver_sharded::connect_params::parse(const picojson::value& _def)
   }
   const picojson::value::object& defobj(def.get<picojson::value::object>());
   picojson::value::object::const_iterator vi;
-#define COPY_IF_TYPE(val, type)			  \
+#define COPY_IF_TYPE(val, type, desttype)	  \
   if ((vi = defobj.find(#val)) != defobj.end()) { \
     if (! vi->second.is<type>()) {		  \
       return #val " is not a " #type;		  \
     }						  \
-    val = vi->second.get<type>();	     	  \
+    val = (desttype)vi->second.get<type>();	  \
   }
-  COPY_IF_TYPE(host, string);
-  COPY_IF_TYPE(port, double);
-  COPY_IF_TYPE(username, string);
-  COPY_IF_TYPE(password, string);
+  COPY_IF_TYPE(host, string, string);
+  COPY_IF_TYPE(port, double, unsigned short);
+  COPY_IF_TYPE(username, string, string);
+  COPY_IF_TYPE(password, string, string);
 #undef COPY_IF_TYPE
   return string();
 }
