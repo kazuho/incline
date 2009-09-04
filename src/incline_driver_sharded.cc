@@ -214,17 +214,27 @@ incline_driver_sharded::connect_params::parse(const picojson::value& _def)
   }
   const picojson::value::object& defobj(def.get<picojson::value::object>());
   picojson::value::object::const_iterator vi;
-#define COPY_IF_TYPE(val, type, desttype)	  \
+#define COPY_IF(val)				  \
   if ((vi = defobj.find(#val)) != defobj.end()) { \
-    if (! vi->second.is<type>()) {		  \
-      return #val " is not a " #type;		  \
+    if (! vi->second.is<string>()) {		  \
+      return #val " is not a string";		  \
     }						  \
-    val = (desttype)vi->second.get<type>();	  \
+    val = vi->second.get<string>();	  \
   }
-  COPY_IF_TYPE(host, string, string);
-  COPY_IF_TYPE(port, double, unsigned short);
-  COPY_IF_TYPE(username, string, string);
-  COPY_IF_TYPE(password, string, string);
+  COPY_IF(host);
+  if ((vi = defobj.find("port")) != defobj.end()) {
+      if (vi->second.is<double>()) {
+	port = (unsigned short)vi->second.get<double>();
+      } else if (vi->second.is<string>()) {
+	if (sscanf(vi->second.get<string>().c_str(), "%hu", &port) != 1) {
+	  return "port should be a double or a strig";
+	}
+      } else {
+	return "port is not a double nor a string";
+      }
+  }
+  COPY_IF(username);
+  COPY_IF(password);
 #undef COPY_IF_TYPE
   return string();
 }
