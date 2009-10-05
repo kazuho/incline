@@ -89,6 +89,19 @@ namespace getoptpp {
     }
   };
   
+  class opt_flag : public opt_base {
+  protected:
+    bool flag_;
+  public:
+    opt_flag(char shortname, const char* longname, const std::string& desc)
+      : opt_base(shortname, longname, no_argument, false, desc), flag_(false)
+      {}
+    virtual void handle() {
+      flag_ = true;
+    }
+    const bool operator*() const { return flag_; }
+  };
+  
   template <typename T> class opt_value_base : public opt_base {
   protected:
     T value_;
@@ -130,7 +143,21 @@ namespace getoptpp {
     }
   };
   
+  class opt_version : public opt_flag {
+  protected:
+    std::string version_;
+  public:
+    opt_version(char shortname, const char* longname,
+		const std::string& version)
+      : opt_flag(shortname, longname, "print version"), version_(version) {}
+    virtual void handle() {
+      std::cout << version_ << std::endl;
+      exit(0);
+    }
+  };
+  
   class opt_help : public opt_base {
+  protected:
     std::string progname_;
     std::string commands_;
   public:
