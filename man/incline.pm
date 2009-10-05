@@ -63,7 +63,7 @@ At least four tables are needed to create a microblog service on database shards
     CREATE TABLE tweet (
       tweet_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
       user_id INT UNSIGNED NOT NULL,
-      creation_time TIMESTAMP NOT NULL,
+      creation_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       body VARCHAR(255) NOT NULL,
       PRIMARY KEY (tweet_id),
       KEY (user_id,tweet_id)
@@ -176,6 +176,32 @@ To transfer modifications between database shards, forwarders should be run atta
      --source=replication.json --shard-source=shard.json forward
 
 You should automatically restart the forwarder when it exits (it exits under certain conditions, for example, when it loses connection to the attached shard, or when the shard definition is being updated).
+
+=head2 SETUP COMPLETE
+
+Now the whole system is up and running.  You can try insert / update / delete the rows in `following' or `tweet' table and see the other tables updated by incline.
+
+    # User:100 starts following user:10100.  `Follower' table on 10.1.1.2
+    # (the shard for user:10100) will be updated
+    10.1.1.1> INSERT INTO following (user_id,following_id) VALUES \
+              (100,10100);
+    10.1.1.2> SELECT * FROM follower WHEER user_id=10100;
+    +---------+-------------+
+    | user_id | follower_id |
+    +---------+-------------+
+    |   10100 |         100 |
+    +---------+-------------+
+    1 row in set (0.00 sec)
+
+    # User:10100 tweets.  `Timeline' table on 10.1.1.1 will be updated.
+    10.1.1.2> INSERT INTO tweet (user_id,body) VALUES (10100,'hello');
+    10.1.1.1> SELECET * FROM timeline WHERE user_id=100;
+    +---------+---------------+----------+---------------------+
+    | user_id | tweet_user_id | tweet_id |    creation_time    |
+    +---------+---------------+----------+---------------------+
+    |     100 |         10100 |        1 | 2009-10-05 20:32:07 |
+    +---------+---------------+----------+---------------------+
+    1 row in set (0.00 sec)
 
 =head1 THE COMMAND
 
