@@ -6,6 +6,7 @@ extern "C" {
 #include <iterator>
 #include "getoptpp.h"
 #include "start_thread.h"
+#include "incline_config.h"
 #include "incline.h"
 
 using namespace std;
@@ -67,12 +68,12 @@ main(int argc, char** argv)
   string command;
   
   // parse command
-  getoptpp::opt_version opt_version('v', "version", INCLINE_VERSION_STR);
+  getoptpp::opt_version opt_version('v', "version", VERSION);
   getoptpp::opt_help opt_help('h', "help", argv[0], "load-triggers");
   if (! getoptpp::getopt(argc, argv)) {
     exit(1);
   } else if (*opt_version) {
-    cout << "incline " INCLINE_VERSION_STR << endl;
+    cout << "incline " VERSION << endl;
     exit(0);
   }
   argc -= optind;
