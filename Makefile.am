@@ -11,7 +11,7 @@ README: README.pod
 README.html: README.pod
 	pod2html --title="Incline - a replicator for RDB shards" < README.pod > $@
 
-META.yml: META.yml.pl
+META.yml: META.yml.pl src/incline
 	perl $< > $@
 
 dist-hook:
