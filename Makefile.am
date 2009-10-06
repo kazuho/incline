@@ -14,5 +14,8 @@ README.html: README.pod
 META.yml: META.yml.pl
 	perl $< > $@
 
+dist-hook:
+	(cd $(distdir) && find * -type f) > $(distdir)/MANIFEST
+
 test:
 	perl -MTest::Harness -we 'runtests(@ARGV)' t/*.t
