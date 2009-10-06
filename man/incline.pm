@@ -22,7 +22,7 @@ Incline is a replicator for MySQL / PostgreSQL with following characteristics.
 
 =back
 
-This manual consists of three parts, C<INSTALLATION>, C<TUTORIAL>, and C<COMMAND REFENENCE>.  For design documentation and background knowledge, please refer to the URLs listed in the C<SEE ALSO> section.
+This manual consists of three parts, C<INSTALLATION>, C<TUTORIAL>, C<COMMAND REFENENCE>, and C<FILE FORMATS>.  For design documentation and background knowledge, please refer to the URLs listed in the C<SEE ALSO> section.
 
 =head1 INSTALLATION
 
@@ -300,6 +300,90 @@ prints version
 =item --help
 
 prints help
+
+=back
+
+=head1 FILE FORMATS
+
+Incline uses two files, replication definition file and shard definition file.  Both of the files use JSON (see RFC 4627 for details) to represent the structures.
+
+=head2 REPLICATION DEFINITION FILE FORMAT
+
+The definition consists of an array.   Each element represents a single replication definition as a hash: between one `destination' table and more than one `source' tables.  The hash may contain following keys.
+
+=over 4
+
+=item "destination" : dest_table
+
+name of the destination table
+
+=item "source" : src_table
+
+=item "source" : [ src_table_a, src_table_b, ... ]
+
+name of the source table(s)
+
+=item "pk_columns" : { src_column_a : dest_column_a, ... }
+
+maps columns of source tables(s) to the columns of the destination table consisting the primary key.  Source column should include the name of the table when using multiple source tables (like: "src_table_a.column").
+
+=item "npk_columns" : { src_column_a : dest_column_a, ... }
+
+same as C<pk_columns>, however defines relations to the non-primary-key columns of the destination table
+
+=item "merge" : { src_table_column_a : src_table_column_b, ... }
+
+defines INNER JOIN conditions when using multiple source tables.
+
+=item "shard-key" : dest_column
+
+when using --mode=shard, defines the column name of the destination table used as sharding key
+
+=back
+
+=head2 SHARD DEFINITION FILE FORMAT
+
+The shard definition file is required only if --mode is set to `shard'.  The file consists of a single JSON hash.  Incline recognizes following keys in the hash.
+
+=over 4
+
+=item "algorithm" : "hash-int" | "range-int" (required)
+
+defines the shard algorithm.  Incline supports hash-based partitioning and range-based partitioning of integer columns of 64-bits or smaller.
+
+=item "num" : number_of_nodes (hash-int only)
+
+defines number of database shards
+
+=item "nodes" : [ node_def, ... ] (hash-int only)
+
+list of database shards (the number of elements should match the value of the C<num> property)
+
+=item "map" : { lower-bound : node_def, ... } (range-int only)
+
+list of database shards (keys specify the lower bounds for each node)
+
+=back
+
+The node definitions in C<nodes> or C<map> should be a hash or a array of hashes with following key-value pairs.  When using arrays of hashes, incline will only use the first element of the array.  Other elements in the array may be used by other middlewares such as Pacific, for example for defining slave database nodes.
+
+=over 4
+
+=item "host" : host
+
+hostname or IP address of the database node
+
+=item "port" : port
+
+port number of the database node (if ommited, uses the default port number of the RDBMS used)
+
+=item "username" : db_user
+
+username of the database node (default: "root")
+
+=item "password" : db_password
+
+password of the database node (default: empty password)
 
 =back
 
