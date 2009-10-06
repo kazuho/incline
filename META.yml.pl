@@ -7,8 +7,8 @@ use File::Slurp;
 
 print <<"EOT";
 --- #YAML:1.0
-name: Module-Build
-abstract: Build and install Perl modules
+name: incline
+abstract: a replicator for RDB shards
 version: @{[ do {
     my $s = `src/incline --version`;
     chomp $s;
