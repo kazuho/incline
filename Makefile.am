@@ -1,6 +1,6 @@
 SUBDIRS=	src
 man_MANS=	incline.1
-EXTRA_DIST=	README.pod README README.html $(man_MANS) example/*.json t/*.t run_tests.pl
+EXTRA_DIST=	README.pod README README.html $(man_MANS) example/*.json t/*.t
 
 incline.1: README.pod
 	pod2man --name=incline --section=1 < README.pod > $@
