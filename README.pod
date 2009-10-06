@@ -371,11 +371,11 @@ The node definitions in C<nodes> or C<map> should be a hash or a array of hashes
 
 =item "host" : host
 
-hostname or IP address of the database node
+hostname or IP address of the database node (required)
 
 =item "port" : port
 
-port number of the database node (if ommited, uses the default port number of the RDBMS used)
+port number of the database node (default: uses the default port number of the RDBMS used)
 
 =item "username" : db_user
 
