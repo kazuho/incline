@@ -23,7 +23,7 @@ author:
 license: bsd
 distribution_type: script
 requires:
-  File::Slurp
+  File::Slurp: 0
   perl: 5.008
 build_requires:
 test_requires:
