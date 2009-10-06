@@ -1,4 +1,7 @@
 Revision history for incline
 
-0.02  Tu Oct 06 20:30:00 2009
+0.03  Tue Oct 06 22:00:00 2009
+	- use mysql_config to determine the location of mysql files
+
+0.02  Tue Oct 06 20:30:00 2009
 	- initial version
