@@ -72,9 +72,6 @@ main(int argc, char** argv)
   getoptpp::opt_help opt_help('h', "help", argv[0], "load-triggers");
   if (! getoptpp::getopt(argc, argv)) {
     exit(1);
-  } else if (*opt_version) {
-    cout << "incline " VERSION << endl;
-    exit(0);
   }
   argc -= optind;
   argv += optind;
