@@ -1,7 +1,7 @@
 AC_INIT(src/incline_def.cc)
 AC_CONFIG_AUX_DIR(config)
 AM_CONFIG_HEADER(src/incline_config.h)
-AM_INIT_AUTOMAKE("incline", 0.03)
+AM_INIT_AUTOMAKE("incline", 0.04)
 
 AC_PROG_CC
 AM_PROG_CC_C_O

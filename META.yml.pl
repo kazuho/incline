@@ -22,11 +22,11 @@ author:
 ]}
 license: bsd
 distribution_type: script
+dynamic_config: 0
 requires:
   File::Slurp: 0
   perl: 5.008
 build_requires:
-test_requires:
   DBI: 0
   List::MoreUtils: 0
   Scope::Guard: 0
