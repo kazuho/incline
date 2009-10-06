@@ -17,7 +17,7 @@ AC_ARG_WITH(mysql,
 	[MYSQL_DIR="$withval"])
 if test "$MYSQL_DIR" = "yes" -o -z "$MYSQL_DIR"
 then
-	AC_CHECK_LIB(mysqlclient_r, mysql_errno, [FOUND_MYSQL=1])
+	AC_CHECK_HEADERS([mysql.h], [FOUND_MYSQL=1])
 	if test "$FOUND_MYSQL"
 	then
 		LDFLAGS="$LDFLAGS -lmysqlclient_r"
@@ -54,7 +54,7 @@ AC_ARG_WITH(pgsql,
 	[PGSQL_DIR="$withval"])
 if test "$PGSQL_DIR" = "yes" -o -z "$PGSQL_DIR"
 then
-	AC_CHECK_LIB(pq, PQerrorMessage, [FOUND_PGSQL=1])
+	AC_CHECK_HEADERS([libpq-fe.h], [FOUND_PGSQL=1])
 	if test "$FOUND_PGSQL"
 	then
 		LDFLAGS="$LDFLAGS -lpq"
