@@ -12,35 +12,30 @@ AC_PROG_LIBTOOL
 LIBTOOL="$LIBTOOL --preserve-dup-deps"
 AC_SUBST(LIBTOOL)
 
-AC_ARG_WITH(mysql,
-	[  --with-mysql=dir        mysql directory [[automatic]]],
-	[MYSQL_DIR="$withval"])
-if test "$MYSQL_DIR" = "yes" -o -z "$MYSQL_DIR"
+AC_ARG_WITH(mysql-config,
+	[  --with-mysql-config=mysql-config
+                          path to mysql_config [[automatic]]],
+	[MYSQL_CONFIG="$withval"])
+if test "$MYSQL_CONFIG" = "yes" -o -z "$MYSQL_CONFIG"
 then
-	AC_CHECK_HEADERS([mysql.h], [FOUND_MYSQL=1])
-	if test "$FOUND_MYSQL"
+	MYSQL_CONFIG_PATH=`which mysql_config` 2> /dev/null
+	if test "$MYSQL_CONFIG_PATH"
 	then
-		LDFLAGS="$LDFLAGS -lmysqlclient_r"
-		WITH_MYSQL=1
-		MYSQL_DIR="no"
-	elif test -d /usr/local/mysql
-	then
-		MYSQL_DIR=/usr/local/mysql
-	elif test "$MYSQL_DIR" = "yes"
-	then
-		AC_MSG_ERROR([could not find mysql])
+		MYSQL_CONFIG="$MYSQL_CONFIG_PATH"
 	else
-		MYSQL_DIR="no"
+		if "$MYSQL_CONFIG" = "yes"
+		then
+			AC_MSG_ERROR([could not find mysql_config])
+		fi
+		MYSQL_CONFIG="no"
 	fi
 fi
-if test "$MYSQL_DIR" != "no"
+if test "$MYSQL_CONFIG" != "no"
 then
-	if test ! -d "$MYSQL_DIR"
-	then
-		AC_MSG_ERROR([could not find mysql at given location])
-	fi
-	CPPFLAGS="$CPPFLAGS -I$MYSQL_DIR/include/mysql -I$MYSQL_DIR/include"
-	LDFLAGS="$LDFLAGS -L$MYSQL_DIR/lib/mysql -L$MYSQL_DIR/lib -lmysqlclient_r"
+	MYSQL_CFLAGS=`$MYSQL_CONFIG --include`
+	CPPFLAGS="$CPPFLAGS $MYSQL_CFLAGS"
+	MYSQL_LDFLAGS=`$MYSQL_CONFIG --libs_r`
+	LDFLAGS="$MYSQL_LDFLAGS $LDFLAGS"
 	WITH_MYSQL=1
 fi
 if test "$WITH_MYSQL"
