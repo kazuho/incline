@@ -12,4 +12,4 @@ README.html: README.pod
 	pod2html --title="Incline - a replicator for RDB shards" < README.pod > $@
 
 test:
-	./run_tests.pl
+	perl -MTest::Harness -we 'runtests(@ARGV)' t/*.t
