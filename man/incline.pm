@@ -22,13 +22,9 @@ Incline is a replicator for MySQL / PostgreSQL with following characteristics.
 
 =back
 
-This manual contains tutorial and command line reference of incline.  For design documentation and background knowledge, please refer to the URLs listed in the C<SEE ALSO> section.
+This manual consists of three parts, C<INSTALLATION>, C<TUTORIAL>, and C<COMMAND REFENENCE>.  For design documentation and background knowledge, please refer to the URLs listed in the C<SEE ALSO> section.
 
-=head1 TUTORIAL
-
-The tutorial explains how to create a microblog service (like twitter) running on four database shards.  Incline (by itself) does not support adding database nodes without stopping the service.  If you are interested in such feature, please refer to the documentation of C<Pacific> after reading this tutorial.
-
-=head2 INSTALLATION
+=head1 INSTALLATION
 
 Incline uses C<autotools> and automatically tries to detect the client libraries of MySQL and / or PostgreSQL, so a typical installation procedure will be as follows.
 
@@ -43,6 +39,10 @@ If configure fails to locate the client libraries, --with-mysql and --with-pgsql
 Also, if you have perl and its DBI drivers installed, it is possible to run the embedded tests using make.
 
     % make test
+
+=head1 TUTORIAL
+
+The tutorial explains how to create a microblog service (like twitter) running on four database shards.  Incline (by itself) does not support adding database nodes without stopping the service.  If you are interested in such feature, please refer to the documentation of C<Pacific> after reading this tutorial.
 
 =head2 CREATING TABLES
 
@@ -203,7 +203,7 @@ Now the whole system is up and running.  You can try insert / update / delete th
     +---------+---------------+----------+---------------------+
     1 row in set (0.00 sec)
 
-=head1 THE COMMAND
+=head1 COMMAND REFERENCE
 
 reference comes here
 
