@@ -1,6 +1,6 @@
 SUBDIRS=	src
 man_MANS=	incline.1
-EXTRA_DIST=	README.pod README README.html $(man_MANS) META.yml.pl META.yml example/*.json t/*.t
+EXTRA_DIST=	$(man_MANS) Makefile.PL META.yml META.yml.pl README.pod README README.html example/*.json t/*.t
 
 incline.1: README.pod
 	pod2man --name=incline --section=1 < README.pod > $@
