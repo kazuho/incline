@@ -33,7 +33,12 @@ test_requires:
   Test::mysqld: 0
   Test::postgresqld: 0
 resources:
-  license: http://dev.perl.org/licenses/
+  license: http://www.opensource.org/licenses/bsd-license.php
+no_index:
+  directory:
+    - example
+    - src
+    - t
 meta-spec:
   version: 1.4
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
