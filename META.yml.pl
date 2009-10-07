@@ -9,9 +9,10 @@ my $meta = {
     name               => 'incline',
     abstract           => 'a replicator for RDB shards',
     version            => do {
-        my $s = `src/incline --version`;
-        chomp $s;
-        $s;
+        my $s = `echo VERSION | cpp -include src/incline_config.h`;
+        $s =~ s/^.*\n\"([0-9_\.]+)\".*?$/$1/s
+            or die "failed to obtain version number";
+        $1;
     },
     author             => do {
         open my $fh, '<', 'AUTHORS'
