@@ -1,10 +1,13 @@
 Revision history for incline
 
-0.04  Tue Oct 06 23:47:00 2009
+0.04_01	Wed Oct 07 13:55:00 2009
+	- insert PREREQ_PM into Makefile
+
+0.04	Tue Oct 06 23:47:00 2009
 	- set dynamic_config to 0 so that CPAN.pm will install depending modules (hopefully)
 
-0.03  Tue Oct 06 22:00:00 2009
+0.03	Tue Oct 06 22:00:00 2009
 	- use mysql_config to determine the location of mysql files
 
-0.02  Tue Oct 06 20:30:00 2009
+0.02	Tue Oct 06 20:30:00 2009
 	- initial version
