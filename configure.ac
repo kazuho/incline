@@ -1,7 +1,7 @@
 AC_INIT(src/incline_def.cc)
 AC_CONFIG_AUX_DIR(config)
 AM_CONFIG_HEADER(src/incline_config.h)
-AM_INIT_AUTOMAKE("incline", 0.04)
+AM_INIT_AUTOMAKE("incline", 0.04_01)
 
 AC_PROG_CC
 AM_PROG_CC_C_O
@@ -90,3 +90,9 @@ CFLAGS="$CFLAGS -Wall -g -O"
 CXXFLAGS="$CXXFLAGS -Wall -g -O"
 
 AC_OUTPUT(Makefile src/Makefile)
+
+cp Makefile Makefile.orig && perl META.yml.pl --fix-makefile < Makefile.orig > Makefile
+if test "$?" -ne "0"
+then
+	AC_MSG_ERROR([failed to add metainfo to Makefile])
+fi
