@@ -44,6 +44,7 @@ my $meta = {
     },
     no_index           => {
         directory => [ qw/example src t/ ],
+        file      => [ qw/README.html/ ],
     },
     'meta-spec'        => {
         version => 1.4,
