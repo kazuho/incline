@@ -1,5 +1,9 @@
 Revision history for incline
 
+0.05	Wed Oct 07 16:13:00 2009
+	- META.yml.pl obtains version number from config.h (to suppress warning)
+	- add README.html to no_index
+
 0.04_01	Wed Oct 07 13:55:00 2009
 	- insert PREREQ_PM into Makefile
 
