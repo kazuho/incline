@@ -51,7 +51,7 @@ namespace getoptpp {
     opt_base(char shortname, const char* longname, int has_arg, bool required,
 	     const std::string& desc)
       : shortname_(shortname), die_on_validate_(required), desc_(desc) {
-      o_.name = longname;
+      o_.name = const_cast<char*>(longname);
       o_.has_arg = has_arg;
       o_.flag = NULL;
       o_.val = 0;
