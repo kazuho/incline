@@ -28,7 +28,7 @@ my $meta = {
     distribution_type  => 'script',
     dynamic_config     => 0,
     configure_requires => {
-        perl          => 5.008,
+        perl          => '5.008',
         YAML          => 0,
     },
     requires           => {},
@@ -36,8 +36,8 @@ my $meta = {
         DBI                => 0,
         'List::MoreUtils'  => 0,
         'Scope::Guard'     => 0,
-        'Test::mysqld'     => 0,
-        'Test::postgresql' => 0,
+        'Test::mysqld'     => '0.09',
+        'Test::postgresql' => '0.07',
     },
     resources          => {
         license => 'http://www.opensource.org/licenses/bsd-license.php',

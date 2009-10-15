@@ -9,7 +9,7 @@ use Scope::Guard;
 use Test::More;
 
 # skip tests if dbms does not exist
-InclineTest->create_any(
+init_db(
     mysqld => {
         my_cnf => { 'skip-networking' => '' },
     },
@@ -28,7 +28,6 @@ my @db_nodes = (
     qw/127.0.0.1:19010 127.0.0.1:19011 127.0.0.1:19012/, # use the first three
 );
 my @db;
-my @dbi_uri;
 my @dbh;
 
 diag("please ignore diag messages unless any test fails");
@@ -36,7 +35,7 @@ diag("please ignore diag messages unless any test fails");
 for my $db_node (@db_nodes) {
     my ($db_host, $db_port) = split /:/, $db_node, 2;
     # start db
-    push @db, InclineTest->create_any(
+    push @db, init_db(
         mysqld => {
             my_cnf => {
                 'bind-address'           => $db_host,
@@ -48,10 +47,9 @@ for my $db_node (@db_nodes) {
             port => $db_port,
         },
     );
-    push @dbi_uri, "DBI:any(PrintWarn=>0,RaiseError=>0):dbname=test;user=root;host=$db_host;port=$db_port";
     # create tables
     push @dbh, do {
-        my $dbh = InclineTest->connect($dbi_uri[-1])
+        my $dbh = DBI->connect($db[-1]->dsn)
             or die $DBI::errstr;
         $dbh;
     };
@@ -245,7 +243,7 @@ is_deeply(
         'insert into cal_member 2 (partially down)',
     );
     $db[2]->start();
-    $dbh[2] = InclineTest->connect($dbi_uri[2])
+    $dbh[2] = DBI->connect($db[2]->dsn)
         or die $DBI::errstr;
     is_deeply($cmpf->(2), 'recovery test');
 }

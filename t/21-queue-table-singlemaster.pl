@@ -8,7 +8,7 @@ use InclineTest;
 use Scope::Guard;
 use Test::More;
 
-my $instance = InclineTest->create_any(
+my $db = init_db(
     mysqld => {
         my_cnf => {
             'bind-address'           => '127.0.0.1',
@@ -30,9 +30,8 @@ my @incline_cmd = (
     qw(--database=test),
 );
 
-my $dbh = InclineTest->connect(
-    'DBI:any(PrintWarn=>0,RaiseError=>0):dbname=test;user=root;host=127.0.0.1;port=19010',
-) or die DBI->errstr;
+my $dbh = DBI->connect($db->dsn)
+    or die DBI->errstr;
 
 # create tables
 ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")

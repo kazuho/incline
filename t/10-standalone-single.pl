@@ -7,7 +7,7 @@ use DBI;
 use InclineTest;
 use Test::More;
 
-my $instance = InclineTest->create_any(
+my $db = init_db(
     mysqld => {
         my_cnf => {
             'bind-address'           => '127.0.0.1',
@@ -22,9 +22,8 @@ my $instance = InclineTest->create_any(
 
 plan tests => 14;
 
-my $dbh = InclineTest->connect(
-    'DBI:any(PrintWarn=>0):dbname=test;user=root;host=127.0.0.1;port=19010',
-) or die $DBI::errstr;
+my $dbh = DBI->connect($db->dsn)
+    or die $DBI::errstr;
 
 # create tables
 ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")
@@ -35,7 +34,7 @@ ok(
 );
 ok(
     $dbh->do(
-        InclineTest->adjust_ddl(
+        adjust_ddl(
             'CREATE TABLE incline_src (id SERIAL,message VARCHAR(255) NOT NULL,PRIMARY KEY (id))',
         ),
     ),

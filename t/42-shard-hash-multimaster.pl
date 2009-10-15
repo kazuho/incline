@@ -9,7 +9,7 @@ use Scope::Guard;
 use Test::More;
 
 # skip tests if dbms does not exist
-InclineTest->create_any(
+init_db(
     mysqld => {
         my_cnf => { 'skip-networking' => '' },
     },
@@ -31,7 +31,7 @@ my @dbh;
 for my $db_node (@db_nodes) {
     my ($db_host, $db_port) = split /:/, $db_node, 2;
     # start mysqld
-    push @db, InclineTest->create_any(
+    push @db, init_db(
         mysqld => {
             my_cnf => {
                 'bind-address'           => $db_host,
@@ -45,16 +45,15 @@ for my $db_node (@db_nodes) {
     );
     # create tables
     push @dbh, do {
-        my $dbh = InclineTest->connect(
-            "DBI:any(PrintWarn=>0,RaiseError=>0):dbname=test;user=root;host=$db_host;port=$db_port",
-        ) or die DBI->errstr;
+        my $dbh = DBI->connect($db[-1]->dsn)
+            or die DBI->errstr;
         $dbh;
     };
     ok($dbh[-1]->do("DROP TABLE IF EXISTS $_"), "drop $_")
         for qw/incline_tweet incline_follow incline_timeline/;
     ok(
         $dbh[-1]->do(
-            InclineTest->adjust_ddl(
+            adjust_ddl(
                 'CREATE TABLE incline_tweet (id SERIAL,user_id INT NOT NULL,body VARCHAR(255) NOT NULL,PRIMARY KEY(id))',
             ),
         ),
