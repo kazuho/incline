@@ -13,7 +13,7 @@ LIBTOOL="$LIBTOOL --preserve-dup-deps"
 AC_SUBST(LIBTOOL)
 
 AC_ARG_WITH(mysql-config,
-	[  --with-mysql-config=mysql-config
+	[  --with-mysql-config=mysql_config
                           path to mysql_config [[automatic]]],
 	[MYSQL_CONFIG="$withval"])
 if test "$MYSQL_CONFIG" = "yes" -o -z "$MYSQL_CONFIG"
@@ -44,35 +44,30 @@ then
 fi
 AM_CONDITIONAL(WITH_MYSQL, test "$WITH_MYSQL")
 
-AC_ARG_WITH(pgsql,
-	[  --with-pgsql=dir        postgresql directory [[automatic]]],
-	[PGSQL_DIR="$withval"])
-if test "$PGSQL_DIR" = "yes" -o -z "$PGSQL_DIR"
+AC_ARG_WITH(pg-config,
+	[  --with-pg-config=pg_config
+                          path to pg_config [[automatic]]],
+        [PG_CONFIG="$withval"])
+if test "$PG_CONFIG" = "yes" -o -z "$PG_CONFIG"
 then
-	AC_CHECK_HEADERS([libpq-fe.h], [FOUND_PGSQL=1])
-	if test "$FOUND_PGSQL"
+	PG_CONFIG_PATH=`which pg_config` 2> /dev/null
+	if test "$PG_CONFIG_PATH"
 	then
-		LDFLAGS="$LDFLAGS -lpq"
-		WITH_PGSQL=1
-		PGSQL_DIR="no"
-	elif test -d /usr/local/pgsql
-	then
-		PGSQL_DIR=/usr/local/pgsql
-	elif test "$PGSQL_DIR" = "yes"
-	then
-		AC_MSG_ERROR([could not find pgsql])
+		PG_CONFIG="$PG_CONFIG_PATH"
 	else
-		PGSQL_DIR="no"
+		if "$PG_CONFIG" = "yes"
+		then
+			AC_MSG_ERROR([could not find pg_config])
+		fi
+		PG_CONFIG="no"
 	fi
 fi
-if test "$PGSQL_DIR" != "no"
+if test "$PG_CONFIG" != "no"
 then
-	if test ! -d "$PGSQL_DIR"
-	then
-		AC_MSG_ERROR([could not find pgsql at given location])
-	fi
-	CPPFLAGS="$CPPFLAGS -I$PGSQL_DIR/include"
-	LDFLAGS="$LDFLAGS -L$PGSQL_DIR/lib -lpq"
+	PG_INCDIR=`$PG_CONFIG --includedir`
+	CPPFLAGS="$CPPFLAGS -I$PG_INCDIR"
+	PG_LIBDIR=`$PG_CONFIG --libdir`
+	LDFLAGS="-L$PG_LIBDIR -lpq $LDFLAGS"
 	WITH_PGSQL=1
 fi
 if test "$WITH_PGSQL"
@@ -88,6 +83,21 @@ fi
 
 CFLAGS="$CFLAGS -Wall -g -O"
 CXXFLAGS="$CXXFLAGS -Wall -g -O"
+
+echo
+echo
+echo -n "     building with following database drivers:"
+if test "$WITH_MYSQL"
+then
+	echo -n " mysql"
+fi
+if test "$WITH_PGSQL"
+then
+	echo -n " pgsql"
+fi
+echo
+echo
+echo
 
 AC_OUTPUT(Makefile src/Makefile)
 
