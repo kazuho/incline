@@ -4,6 +4,7 @@
 extern "C" {
 #include <getopt.h>
 }
+#include <algorithm>
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
