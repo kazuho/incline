@@ -9,11 +9,10 @@ use Benchmark ();
 use DBI;
 use InclineTest;
 
-my $ROWS = 100_000;
+my $ROWS = 10_000;
 my $ROWS_PER_STMT = 100;
 
 # setup
-Benchmark::enablecache();
 my $db = init_db(
     mysqld => {
         my_cnf => {
@@ -21,7 +20,6 @@ my $db = init_db(
             port                           => 19010,
             'default-storage-engine'       => 'INNODB',
             innodb_buffer_pool_size        => '128M',
-            innodb_flush_log_at_trx_commit => 0,
             innodb_flush_method            => 'O_DIRECT',
             innodb_log_file_size           => '128M',
         },
@@ -32,11 +30,11 @@ my $db = init_db(
 );
 my $dbh = DBI->connect($db->dsn)
     or die $DBI::errstr;
-$dbh->do(adjust_ddl('CREATE TABLE d (x SERIAL,y INT NOT NULL,PRIMARY KEY (x,y),KEY y_x (y,x))'))
+$dbh->do('CREATE TABLE d (x INT NOT NULL,y INT NOT NULL,PRIMARY KEY (x,y),UNIQUE (y,x))')
     or die $dbh->errstr;
-$dbh->do(adjust_ddl('CREATE TABLE i_s (x SERIAL,y INT NOT NULL,PRIMARY KEY (x,y))'))
+$dbh->do('CREATE TABLE i_s (x INT NOT NULL,y INT NOT NULL,PRIMARY KEY (x,y))')
     or die $dbh->errstr;
-$dbh->do(adjust_ddl('CREATE TABLE i_d (y INT NOT NULL,x INT NOT NULL,PRIMARY KEY (y,x))'))
+$dbh->do('CREATE TABLE i_d (y INT NOT NULL,x INT NOT NULL,PRIMARY KEY (y,x))')
     or die $dbh->errstr;
 system(
     qw(src/incline),
@@ -67,25 +65,57 @@ sub do_delete {
     }
 }
 
-my (%insert_bench, %delete_bench);
+my %bench;
 # benchmark
-for (my $i = 0; $i < 4; $i++) {
+for (my $i = 0; $i < 1; $i++) {
     # direct
-    print STDERR ".";
-    push_bench(\%insert_bench, 'direct', sub { do_insert('d') });
-    print STDERR ".";
-    push_bench(\%delete_bench, 'direct', sub { do_delete('d') });
-    # incline
-    print STDERR ".";
-    push_bench(\%insert_bench, 'incline', sub { do_insert('i_s') });
-    print STDERR ".";
-    push_bench(\%delete_bench, 'incline', sub { do_delete('i_s') });
+    for (1, 10, 100) {
+        $ROWS_PER_STMT = $_;
+        print STDERR ".";
+        push_bench(
+            ($bench{"insert ($ROWS_PER_STMT rows)"} ||= {}),
+            'direct',
+            sub { do_insert('d') },
+        );
+        print STDERR ".";
+        push_bench(
+            ($bench{"delete ($ROWS_PER_STMT rows)"} ||= {}),
+            'direct',
+            sub { do_delete('d') },
+        );
+        $dbh->selectrow_arrayref('SELECT COUNT(*) FROM d')->[0] == 0
+            or die "logic flaw";
+        # incline
+        print STDERR ".";
+        push_bench(
+            ($bench{"insert ($ROWS_PER_STMT rows)"} ||= {}),
+            'incline',
+            sub { do_insert('i_s') },
+        );
+        $dbh->selectrow_arrayref('SELECT COUNT(*) FROM i_d')->[0] == $ROWS
+            or die "logic flaw";
+        print STDERR ".";
+        push_bench(
+            ($bench{"delete ($ROWS_PER_STMT rows)"} ||= {}),
+            'incline',
+            sub { do_delete('i_s') },
+        );
+        $dbh->selectrow_arrayref('SELECT COUNT(*) FROM i_s')->[0] == 0
+            or die "logic flaw";
+        $dbh->selectrow_arrayref('SELECT COUNT(*) FROM i_d')->[0] == 0
+            or die "logic flaw";
+    }
 }
+
 print STDERR "\n\n";
 
 # print
-print "insert speed:\n";
-Benchmark::cmpthese(\%insert_bench);
-print "\ndelete speed:\n";
-Benchmark::cmpthese(\%delete_bench);
-print "\n";
+for my $n (sort keys %bench) {
+    print "$n:\n";
+    Benchmark::cmpthese($bench{$n});
+    print "\n";
+}
+
+$dbh->disconnect;
+undef $dbh;
+undef $db;

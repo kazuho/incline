@@ -3,7 +3,7 @@ package InclineTest;
 use strict;
 use warnings;
 
-use Benchmark ();
+use Benchmark qw(:hireswallclock);
 use DBI;
 use Exporter qw(import);
 use Test::More;
@@ -41,7 +41,10 @@ sub adjust_ddl {
 
 sub push_bench {
     my ($bench, $n, $c) = @_;
-    my $t = Benchmark::timeit(1, $c);
+    my $t = Benchmark::runloop(1, $c, $n);
+    # use time spend _outside_ this process
+    $t->[1] = $t->[3] = $t->[0] - $t->[1];
+    $t->[2] = $t->[4] = 0;
     $bench->{$n} = $bench->{$n} ? Benchmark::timesum($bench->{$n}, $t) : $t;
 }
 
