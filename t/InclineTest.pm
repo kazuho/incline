@@ -3,13 +3,14 @@ package InclineTest;
 use strict;
 use warnings;
 
+use Benchmark ();
 use DBI;
 use Exporter qw(import);
 use Test::More;
 use Test::mysqld;
 use Test::postgresql;
 
-our @EXPORT = qw(init_db adjust_ddl);
+our @EXPORT = qw(init_db adjust_ddl push_bench print_bench);
 
 sub init_db {
     my %opts = @_;
@@ -36,6 +37,12 @@ sub adjust_ddl {
         $ddl =~ s/(\s+)SERIAL(\W?)/$1INT UNSIGNED NOT NULL AUTO_INCREMENT$2/ig;
     }
     $ddl;
+}
+
+sub push_bench {
+    my ($bench, $n, $c) = @_;
+    my $t = Benchmark::timeit(1, $c);
+    $bench->{$n} = $bench->{$n} ? Benchmark::timesum($bench->{$n}, $t) : $t;
 }
 
 1;

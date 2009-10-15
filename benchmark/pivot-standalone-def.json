@@ -1,0 +1,10 @@
+[
+  {
+    "destination" : "i_d",
+    "source"      : "i_s",
+    "pk_columns"  : {
+       "i_s.x" : "x",
+       "i_s.y" : "y"
+    }
+  }
+]
