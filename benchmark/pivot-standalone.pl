@@ -29,7 +29,7 @@ my $db = init_db(
     },
 );
 {
-    my $dbh = DBI->connect($db->dsn)
+    my $dbh = DBI->connect($db->dsn, undef, undef, { AutoCommit => 1 })
         or die $DBI::errstr;
     $dbh->do('CREATE TABLE d (x INT NOT NULL,y INT NOT NULL,PRIMARY KEY (x,y),UNIQUE (y,x))')
         or die $dbh->errstr;
@@ -70,7 +70,7 @@ sub do_insert {
     do_parallel(
         sub {
             my $base = shift(@_) * $ROWS / $NUM_WORKERS;
-            my $dbh = DBI->connect($db->dsn)
+            my $dbh = DBI->connect($db->dsn, undef, undef, { AutoCommit => 1 })
                 or die $DBI::errstr;
             my @rows;
             for (my $i = 0; $i < $ROWS / $NUM_WORKERS; $i++) {
@@ -92,7 +92,7 @@ sub do_delete {
     do_parallel(
         sub {
             my $base = shift(@_) * $ROWS / $NUM_WORKERS;
-            my $dbh = DBI->connect($db->dsn)
+            my $dbh = DBI->connect($db->dsn, undef, undef, { AutoCommit => 1 })
                 or die $DBI::errstr;
             for (my $i = 0; $i < $ROWS / $NUM_WORKERS; $i += $rows_per_stmt) {
                 my $x = $i + $base;
