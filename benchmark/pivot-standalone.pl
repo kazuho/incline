@@ -45,29 +45,10 @@ system(
        create-trigger),
 ) == 0 or die "src/incline failed: $?";
 
-sub do_parallel {
-    my $code = shift;
-    my %pids;
-    for (my $i = 0; $i < $NUM_WORKERS; $i++) {
-        defined(my $pid = fork)
-            or die "fork failed:$!";
-        if ($pid == 0) {
-            # child process
-            $code->($i);
-            exit 0;
-        }
-        $pids{$pid} = 1;
-    }
-    while (%pids) {
-        if ((my $pid = wait) != -1) {
-            delete $pids{$pid};
-        }
-    }
-}
-
 sub do_insert {
     my ($table, $rows_per_stmt) = @_;
     do_parallel(
+        $NUM_WORKERS,
         sub {
             my $base = shift(@_) * $ROWS / $NUM_WORKERS;
             my $dbh = DBI->connect($db->dsn, undef, undef, { AutoCommit => 1 })
@@ -90,6 +71,7 @@ sub do_insert {
 sub do_delete {
     my ($table, $rows_per_stmt) = @_;
     do_parallel(
+        $NUM_WORKERS,
         sub {
             my $base = shift(@_) * $ROWS / $NUM_WORKERS;
             my $dbh = DBI->connect($db->dsn, undef, undef, { AutoCommit => 1 })

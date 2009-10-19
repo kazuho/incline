@@ -10,7 +10,7 @@ use Test::More;
 use Test::mysqld;
 use Test::postgresql;
 
-our @EXPORT = qw(init_db adjust_ddl push_bench print_bench);
+our @EXPORT = qw(init_db adjust_ddl do_parallel push_bench);
 
 sub init_db {
     my %opts = @_;
@@ -37,6 +37,26 @@ sub adjust_ddl {
         $ddl =~ s/(\s+)SERIAL(\W?)/$1INT UNSIGNED NOT NULL AUTO_INCREMENT$2/ig;
     }
     $ddl;
+}
+
+sub do_parallel {
+    my ($num_workers, $code) = @_;
+    my %pids;
+    for (my $i = 0; $i < $num_workers; $i++) {
+        defined(my $pid = fork)
+            or die "fork failed:$!";
+        if ($pid == 0) {
+            # child process
+            $code->($i);
+            exit 0;
+        }
+        $pids{$pid} = 1;
+    }
+    while (%pids) {
+        if ((my $pid = wait) != -1) {
+            delete $pids{$pid};
+        }
+    }
 }
 
 sub push_bench {
