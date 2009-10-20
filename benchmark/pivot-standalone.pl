@@ -3,12 +3,14 @@
 use strict;
 use warnings;
 
-use lib qw(t benchmark);
+use lib qw(t);
 
 use Benchmark ();
 use DBI;
 use InclineTest;
-use pivot;
+
+my $ROWS = 10_000;
+my $NUM_WORKERS = 10;
 
 # setup
 my $db = init_db(
@@ -26,7 +28,16 @@ my $db = init_db(
         port => 19010,
     },
 );
-setup_db($db->dsn);
+{
+    my $dbh = DBI->connect($db->dsn, undef, undef, { AutoCommit => 1 })
+        or die $DBI::errstr;
+    $dbh->do('CREATE TABLE d (x INT NOT NULL,y INT NOT NULL,PRIMARY KEY (x,y),UNIQUE (y,x))')
+        or die $dbh->errstr;
+    $dbh->do('CREATE TABLE i_s (x INT NOT NULL,y INT NOT NULL,PRIMARY KEY (x,y))')
+        or die $dbh->errstr;
+    $dbh->do('CREATE TABLE i_d (y INT NOT NULL,x INT NOT NULL,PRIMARY KEY (y,x))')
+        or die $dbh->errstr;
+}
 system(
     qw(src/incline),
     "--rdbms=$ENV{TEST_DBMS}",
@@ -34,22 +45,70 @@ system(
        create-trigger),
 ) == 0 or die "src/incline failed: $?";
 
+sub do_insert {
+    my ($table, $rows_per_stmt) = @_;
+    die "condition check failed"
+        unless $ROWS % ($NUM_WORKERS * $rows_per_stmt) == 0;
+    do_parallel(
+        $NUM_WORKERS,
+        sub {
+            my $base = shift(@_) * $ROWS / $NUM_WORKERS;
+            my $dbh = DBI->connect($db->dsn, undef, undef, { AutoCommit => 1 })
+                or die $DBI::errstr;
+            my @rows;
+            for (my $i = 0; $i < $ROWS / $NUM_WORKERS; $i++) {
+                my $x = $i + $base;
+                push @rows, "($x," . ($x * 33 % $ROWS) . ')';
+                if (@rows == $rows_per_stmt) {
+                    $dbh->do(
+                        "INSERT INTO $table (x,y) VALUES " . join(',', @rows),
+                    ) or die $dbh->errstr;
+                    @rows = ();
+                }
+            }
+        },
+    );
+}
+
+sub do_delete {
+    my ($table, $rows_per_stmt) = @_;
+    die "condition check failed"
+        unless $ROWS % ($NUM_WORKERS * $rows_per_stmt) == 0;
+    do_parallel(
+        $NUM_WORKERS,
+        sub {
+            my $base = shift(@_) * $ROWS / $NUM_WORKERS;
+            my $dbh = DBI->connect($db->dsn, undef, undef, { AutoCommit => 1 })
+                or die $DBI::errstr;
+            for (my $i = 0; $i < $ROWS / $NUM_WORKERS; $i += $rows_per_stmt) {
+                my $x = $i + $base;
+                $dbh->do(
+                    "DELETE FROM $table WHERE $x<=x AND x<"
+                        . ($x + $rows_per_stmt),
+                ) or die $dbh->errstr;
+            }
+        },
+    );
+}
+
 my %bench;
 # benchmark
-for (my $i = 0; $i < 3; $i++) {
+for (my $i = 0; $i < 1; $i++) {
     # direct
     for my $rows_per_stmt (1, 10, 100) {
+        die "condition check failed"
+            unless $ROWS % ($NUM_WORKERS * $rows_per_stmt) == 0;
         print STDERR ".";
         push_bench(
             ($bench{"insert ($rows_per_stmt rows)"} ||= {}),
             'direct',
-            sub { do_insert($db->dsn, 'd', $rows_per_stmt) },
+            sub { do_insert('d', $rows_per_stmt) },
         );
         print STDERR ".";
         push_bench(
             ($bench{"delete ($rows_per_stmt rows)"} ||= {}),
             'direct',
-            sub { do_delete($db->dsn, 'd', $rows_per_stmt) },
+            sub { do_delete('d', $rows_per_stmt) },
         );
         DBI->connect($db->dsn)->selectrow_arrayref(
             'SELECT COUNT(*) FROM d',
@@ -60,17 +119,17 @@ for (my $i = 0; $i < 3; $i++) {
         push_bench(
             ($bench{"insert ($rows_per_stmt rows)"} ||= {}),
             'incline',
-            sub { do_insert($db->dsn, 'i_s', $rows_per_stmt) },
+            sub { do_insert('i_s', $rows_per_stmt) },
         );
         DBI->connect($db->dsn)->selectrow_arrayref(
             'SELECT COUNT(*) FROM i_d',
-        )->[0] == $pivot::ROWS
+        )->[0] == $ROWS
             or die "logic flaw";
         print STDERR ".";
         push_bench(
             ($bench{"delete ($rows_per_stmt rows)"} ||= {}),
             'incline',
-            sub { do_delete($db->dsn, 'i_s', $rows_per_stmt) },
+            sub { do_delete('i_s', $rows_per_stmt) },
         );
         DBI->connect($db->dsn)->selectrow_arrayref(
             'SELECT COUNT(*) FROM i_s',

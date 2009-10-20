@@ -1,0 +1,11 @@
+[
+  {
+    "destination" : "iy",
+    "source"      : "ix",
+    "pk_columns"  : {
+       "ix.x" : "x",
+       "ix.y" : "y"
+    },
+    "shard-key" : "y"
+  }
+]
