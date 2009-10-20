@@ -19,6 +19,7 @@ die "condition check failed"
 
 # setup
 my @db;
+my %fw_pid;
 for my $port (19010..19014) {
     push @db, init_db(
         mysqld => {
@@ -57,7 +58,9 @@ for my $port (19010..19014) {
         or die "src/incline create-queue failed: $?";
     system(@cmd, qw(create-trigger)) == 0
         or die "src/incline create-trigger failed: $?";
-    unless (my $pid = fork) {
+    if (my $pid = fork) {
+       $fw_pid{$pid} = 1;
+    } else {
         die "fork failed:$!"
             unless defined $pid;
         exec(@cmd, qw(forward))
@@ -212,6 +215,15 @@ for my $n (sort keys %bench) {
     print "$n:\n";
     Benchmark::cmpthese($bench{$n});
     print "\n";
+}
+
+kill TERM => $_
+    for keys %fw_pid;
+while (%fw_pid) {
+    if (my $pid = wait) {
+        delete $fw_pid{$pid}
+            unless $pid == -1;
+    }
 }
 
 undef @db;
