@@ -39,7 +39,7 @@ struct incline_util {
       target.push_back(prefix + *si);
     }
   }
-  static std::string filter(const char* fmt, size_t n, ...);
+  static std::string filter(const char* fmt, int idx, size_t n, ...);
   static std::vector<std::string> filter(const char* fmt, const std::vector<std::string>& list);
   static std::vector<std::string> filter(const char* fmt, const std::map<std::string, std::string>& map);
   static bool is_one_of(const char* dnt, const char* cmp) {

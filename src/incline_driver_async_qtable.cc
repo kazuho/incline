@@ -84,8 +84,9 @@ incline_driver_async_qtable::_create_table_of(const incline_def_async_qtable*
 			 if_not_exists);
 }
 
-vector<string>
-incline_driver_async_qtable::do_build_enqueue_insert_sql(const incline_def*
+void
+incline_driver_async_qtable::do_build_enqueue_insert_sql(trigger_body& body,
+							 const incline_def*
 							 _def,
 							 const string&
 							 src_table,
@@ -100,15 +101,15 @@ incline_driver_async_qtable::do_build_enqueue_insert_sql(const incline_def*
   extra_columns["_iq_action"] = "'";
   extra_columns["_iq_action"].push_back((char)action);
   extra_columns["_iq_action"].push_back('\'');
-  string sql
-    = incline_driver_standalone::_build_insert_from_def(def, def->queue_table(),
-							src_table, act_insert,
-							cond, &extra_columns);
-  return incline_util::vectorize(sql);
+  incline_driver_standalone::_build_insert_from_def(body, def,
+						    def->queue_table(),
+						    src_table, act_insert, cond,
+						    &extra_columns);
 }
 
-vector<string>
-incline_driver_async_qtable::do_build_enqueue_delete_sql(const incline_def*
+void
+incline_driver_async_qtable::do_build_enqueue_delete_sql(trigger_body& body,
+							 const incline_def*
 							 _def,
 							 const string&
 							 src_table,
@@ -151,7 +152,7 @@ incline_driver_async_qtable::do_build_enqueue_delete_sql(const incline_def*
   if (! cond.empty()){
     sql += " WHERE " + incline_util::join(" AND ", cond);
   }
-  return incline_util::vectorize(sql);
+  body.stmt.push_back(sql);
 }
 
 incline_driver_async_qtable::forwarder::forwarder(forwarder_mgr* mgr,

@@ -5,27 +5,24 @@
 
 using namespace std;
 
-vector<string>
-incline_driver_standalone::insert_trigger_of(const string& src_table) const
+void
+incline_driver_standalone::insert_trigger_of(trigger_body& body,
+					     const string& src_table) const
 {
-  vector<string> body;
   for (vector<incline_def*>::const_iterator di = mgr_->defs().begin();
        di != mgr_->defs().end();
        ++di) {
     const incline_def* def = *di;
     if (def->is_master_of(src_table)) {
-      incline_util::push_back(body,
-			      _build_insert_from_def(def, src_table,
-						     act_insert));
+      _build_insert_from_def(body, def, src_table, act_insert);
     }
   }
-  return mgr_->build_trigger_stmt(src_table, "INSERT", body);
 }
 
-vector<string>
-incline_driver_standalone::update_trigger_of(const string& src_table) const
+void
+incline_driver_standalone::update_trigger_of(trigger_body& body,
+					     const string& src_table) const
 {
-  vector<string> body;
   for (vector<incline_def*>::const_iterator di = mgr_->defs().begin();
        di != mgr_->defs().end();
        ++di) {
@@ -33,48 +30,44 @@ incline_driver_standalone::update_trigger_of(const string& src_table) const
     if (def->is_dependent_of(src_table)) {
       if (def->is_master_of(src_table)) {
 	if (! def->npk_columns().empty()) {
-	  incline_util::push_back(body,
-				  _build_insert_from_def(def, src_table,
-							 act_update));
+	  _build_insert_from_def(body, def, src_table, act_update);
 	}
       } else {
-	incline_util::push_back(body,
-				_build_update_merge_from_def(def, src_table));
+	_build_update_merge_from_def(body, def, src_table);
       }
     }
   }
-  return mgr_->build_trigger_stmt(src_table, "UPDATE", body);
 }
 
-vector<string>
-incline_driver_standalone::delete_trigger_of(const string& src_table) const
+void
+incline_driver_standalone::delete_trigger_of(trigger_body& body,
+					     const string& src_table) const
 {
-  vector<string> body;
   for (vector<incline_def*>::const_iterator di = mgr_->defs().begin();
        di != mgr_->defs().end();
        ++di) {
     const incline_def* def = *di;
     if (def->is_master_of(src_table)) {
-      incline_util::push_back(body, _build_delete_from_def(def, src_table));
+      _build_delete_from_def(body, def, src_table);
     }
   }
-  return mgr_->build_trigger_stmt(src_table, "DELETE", body);
 }
 
-vector<string>
-incline_driver_standalone::_build_insert_from_def(const incline_def* def,
+void
+incline_driver_standalone::_build_insert_from_def(trigger_body& body,
+						  const incline_def* def,
 						  const string& src_table,
 						  action_t action,
 						  const vector<string>* _cond)
   const
 {
-  string sql = _build_insert_from_def(def, def->destination(), src_table,
-				      action, _cond, NULL);
-  return incline_util::vectorize(sql);
+  _build_insert_from_def(body, def, def->destination(), src_table, action,
+			 _cond, NULL);
 }
 
-vector<string>
-incline_driver_standalone::_build_delete_from_def(const incline_def* def,
+void
+incline_driver_standalone::_build_delete_from_def(trigger_body& body,
+						  const incline_def* def,
 						  const string& src_table,
 						  const vector<string>& _cond)
   const 
@@ -148,11 +141,12 @@ incline_driver_standalone::_build_delete_from_def(const incline_def* def,
       + incline_util::join(" AND ", cond);
   }
   
-  return incline_util::vectorize(sql);
+  body.stmt.push_back(sql);
 }
 
-vector<string>
-incline_driver_standalone::_build_update_merge_from_def(const incline_def* def,
+void
+incline_driver_standalone::_build_update_merge_from_def(trigger_body& body,
+							const incline_def* def,
 							const string& src_table,
 							const vector<string>&
 						       _cond) const
@@ -170,7 +164,7 @@ incline_driver_standalone::_build_update_merge_from_def(const incline_def* def,
   string sql = "UPDATE " + def->destination() + " SET "
     + incline_util::join(',', set_expr) + " WHERE "
     + incline_util::join(" AND ", cond);
-  return incline_util::vectorize(sql);
+  body.stmt.push_back(sql);
 }
 
 vector<string>
@@ -200,24 +194,30 @@ incline_driver_standalone::_merge_cond_of(const incline_def* def,
   return cond;
 }
 
-string
-incline_driver_standalone::_build_insert_from_def(const incline_def *def,
+void
+incline_driver_standalone::_build_insert_from_def(trigger_body& body,
+						  const incline_def *def,
 						  const string& dest_table,
 						  const string& src_table,
 						  action_t action,
 						  const vector<string>* _cond,
-						  const map<string, string>* extra_columns)
+						  const map<string, string>*
+						  extra_columns)
 {
+  if (action == act_update && def->npk_columns().empty()) {
+    // nothing to do (pks should not be altered in an UPDATE statement)
+    return;
+  }
+  
   vector<string> cond;
   if (_cond != NULL) {
     incline_util::push_back(cond, *_cond);
   }
-  string sql;
+  string query;
   bool use_update = action == act_update
     && ! incline_dbms::factory_->has_replace_into();
   
-  if (! use_update) {
-    // INSERT or REPLACE
+  { // build query
     vector<string> src_cols;
     for (map<string, string>::const_iterator ci = def->columns().begin();
 	 ci != def->columns().end();
@@ -225,66 +225,61 @@ incline_driver_standalone::_build_insert_from_def(const incline_def *def,
       src_cols.push_back(incline_def::table_of_column(ci->first) == src_table
 			 ? "NEW" + ci->first.substr(src_table.size())
 			 : ci->first);
+      if (use_update) {
+	src_cols.back() += " AS _" + ci->second;
+      }
     }
-    sql = (action == act_insert ? "INSERT INTO " : "REPLACE INTO ") + dest_table
+    query = "SELECT " + incline_util::join(',', src_cols);
+    if (extra_columns != NULL) {
+      query += ","
+	+ incline_util::join(',', incline_util::filter("%2", *extra_columns));
+    }
+    if (def->source().size() > 1) {
+      vector<string> join_tables;
+      for (vector<string>::const_iterator si = def->source().begin();
+	   si != def->source().end();
+	   ++si) {
+	if (*si != src_table) {
+	  join_tables.push_back(*si);
+	}
+      }
+      query += " FROM " + incline_util::join(",", join_tables);
+      incline_util::push_back(cond, def->build_merge_cond(src_table, "NEW"));
+    }
+    if (! cond.empty()) {
+      query += " WHERE " + incline_util::join(" AND ", cond);
+    }
+    if (def->source().size() > 1) {
+      query += " FOR UPDATE";
+    }
+  }
+
+  if (! use_update) {
+    // mysql
+    string sql = (action == act_insert ? "INSERT INTO " : "REPLACE INTO ") + dest_table
       + " ("
       + incline_util::join(',', incline_util::filter("%2", def->columns()));
     if (extra_columns != NULL) {
       sql += ","
 	+ incline_util::join(',', incline_util::filter("%1", *extra_columns));
     }
-    sql += ") SELECT " + incline_util::join(',', src_cols);
+    sql += ") " + query;
+    body.stmt.push_back(sql);
   } else {
-    // UPDATE
-    vector<string> src_cols;
-    for (map<string, string>::const_iterator ci = def->npk_columns().begin();
-	 ci != def->npk_columns().end();
-	 ++ci) {
-      src_cols.push_back(incline_def::table_of_column(ci->first) == src_table
-			 ? "NEW" + ci->first.substr(src_table.size())
-			 : ci->first);
-    }
-    sql = "UPDATE " + dest_table + " SET ("
-      + incline_util::join(',', incline_util::filter("%2", def->npk_columns()));
-    if (extra_columns != NULL) {
-      sql += ","
-	+ incline_util::join(',', incline_util::filter("%1", *extra_columns));
-    }
-    sql += ")=(" + incline_util::join(',', src_cols);
-    for (map<string, string>::const_iterator ci = def->pk_columns().begin();
-	 ci != def->pk_columns().end();
-	 ++ci) {
-      cond.push_back(ci->second + "="
-		     + (incline_def::table_of_column(ci->first) == src_table
-			? "NEW" + ci->first.substr(src_table.size())
-			: ci->first));
-    }
+    // postgresql
+    // TODO do not use for loop if def->source().size() == 1
+    string sql = "UPDATE " + dest_table + " SET ("
+      + incline_util::join(',', incline_util::filter("%2", def->npk_columns()))
+      + ")=("
+      + incline_util::join(',',
+			   incline_util::filter("srow._%2", def->npk_columns()))
+      + ") WHERE "
+      + incline_util::join(" AND ",
+			   incline_util::filter("%2=srow._%2",
+						def->pk_columns()));
+    body.var.push_back("srow RECORD");
+    body.stmt.push_back("FOR srow IN " + query + "  LOOP\\");
+    body.stmt.push_back(sql);
+    body.stmt.push_back("END LOOP");
   }
-  
-  if (extra_columns != NULL) {
-    sql += ","
-      + incline_util::join(',', incline_util::filter("%2", *extra_columns));
-  }
-  
-  if (use_update) {
-    sql += ") ";
-  }
-  
-  if (def->source().size() > 1) {
-    vector<string> join_tables;
-    for (vector<string>::const_iterator si = def->source().begin();
-	 si != def->source().end();
-	 ++si) {
-      if (*si != src_table) {
-	join_tables.push_back(*si);
-      }
-    }
-    sql += " FROM " + incline_util::join(",", join_tables);
-    incline_util::push_back(cond, def->build_merge_cond(src_table, "NEW"));
-  }
-  if (! cond.empty()) {
-    sql += " WHERE " + incline_util::join(" AND ", cond);
-  }
-  
-  return sql;
 }

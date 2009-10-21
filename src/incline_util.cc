@@ -5,7 +5,7 @@
 using namespace std;
 
 string
-incline_util::filter(const char* fmt, size_t n, ...)
+incline_util::filter(const char* fmt, int idx, size_t n, ...)
 {
   vector<const char*> repl;
   va_list args;
@@ -23,6 +23,10 @@ incline_util::filter(const char* fmt, size_t n, ...)
       if ('1' <= *fi && *fi <= '9') {
 	assert((size_t)(*fi - '1') < repl.size());
 	r += repl[(size_t)(*fi - '1')];
+      } else if (*fi == 'I') {
+	char buf[16];
+	sprintf(buf, "%d", idx);
+	r += buf;
       } else {
 	r.push_back(*fi);
       }
@@ -37,10 +41,11 @@ vector<string>
 incline_util::filter(const char* fmt, const vector<string>& list)
 {
   vector<string> r;
+  int idx = 1;
   for (vector<string>::const_iterator li = list.begin();
        li != list.end();
-       ++li) {
-    r.push_back(filter(fmt, 1, li->c_str()));
+       ++li, ++idx) {
+    r.push_back(filter(fmt, idx, 1, li->c_str()));
   }
   return r;
 }
@@ -49,10 +54,11 @@ vector<string>
 incline_util::filter(const char* fmt, const map<string, string>& map)
 {
   vector<string> r;
+  int idx = 1;
   for (std::map<string, string>::const_iterator mi = map.begin();
        mi != map.end();
-       ++mi) {
-    r.push_back(filter(fmt, 2, mi->first.c_str(), mi->second.c_str()));
+       ++mi, ++idx) {
+    r.push_back(filter(fmt, idx, 2, mi->first.c_str(), mi->second.c_str()));
   }
   return r;
 }

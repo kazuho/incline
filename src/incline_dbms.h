@@ -14,7 +14,7 @@ public:
     incline_dbms* create() { return create(std::string(), 0, std::string(), std::string()); }
     std::pair<std::string, unsigned short> get_hostport() const;
     virtual unsigned short default_port() const = 0;
-    virtual std::vector<std::string> create_trigger(const std::string& name, const std::string& event, const std::string& time, const std::string& table, const std::string& funcbody) const = 0;
+    virtual std::vector<std::string> create_trigger(const std::string& name, const std::string& event, const std::string& time, const std::string& table, const std::string& funcvar, const std::string& funcbody) const = 0;
     virtual std::vector<std::string> drop_trigger(const std::string& name, const std::string& table, bool if_exists) const = 0;
     virtual std::string create_queue_table(const std::string& table_name, const std::string& column_defs, bool if_not_exists) const = 0;
     virtual std::string delete_using(const std::string& table_name, const std::vector<std::string>& using_list) const = 0;

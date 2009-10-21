@@ -101,19 +101,25 @@ incline_mgr::drop_trigger_all(bool drop_if_exists) const
 vector<string>
 incline_mgr::insert_trigger_of(const string& src_table) const
 {
-  return driver_->insert_trigger_of(src_table);
+  incline_driver::trigger_body body;
+  driver_->insert_trigger_of(body, src_table);
+  return build_trigger_stmt(src_table, "INSERT", body);
 }
 
 vector<string>
 incline_mgr::update_trigger_of(const string& src_table) const
 {
-  return driver_->update_trigger_of(src_table);
+  incline_driver::trigger_body body;
+  driver_->update_trigger_of(body, src_table);
+  return build_trigger_stmt(src_table, "UPDATE", body);
 }
 
 vector<string>
 incline_mgr::delete_trigger_of(const string& src_table) const
 {
-  return driver_->delete_trigger_of(src_table);
+  incline_driver::trigger_body body;
+  driver_->delete_trigger_of(body, src_table);
+  return build_trigger_stmt(src_table, "DELETE", body);
 }
 
 vector<string>
@@ -127,14 +133,19 @@ incline_mgr::drop_trigger_of(const string& src_table, const string& event,
 
 vector<string>
 incline_mgr::build_trigger_stmt(const string& src_table, const string& event,
-				const vector<string>& body) const
+				const incline_driver::trigger_body& body) const
 {
-  if (body.size() == 0) {
+  if (body.stmt.empty()) {
     return vector<string>();
   }
-  string funcbody;
-  for (vector<string>::const_iterator bi = body.begin();
-       bi != body.end();
+  string funcvar, funcbody;
+  for (vector<string>::const_iterator vi = body.var.begin();
+       vi != body.var.end();
+       ++vi) {
+    funcvar += "  " + *vi + ";\n";
+  }
+  for (vector<string>::const_iterator bi = body.stmt.begin();
+       bi != body.stmt.end();
        ++bi) {
     funcbody += "  ";
     if (! bi->empty() && (*bi)[bi->size() - 1] == '\\') {
@@ -147,7 +158,7 @@ incline_mgr::build_trigger_stmt(const string& src_table, const string& event,
     incline_dbms::factory_->create_trigger(_build_trigger_name(src_table,
 							       event),
 					   event, trigger_time_, src_table,
-					   funcbody);
+					   funcvar, funcbody);
 }
 
 string
