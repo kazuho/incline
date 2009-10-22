@@ -25,6 +25,7 @@ struct incline_util {
     r.push_back(t);
     return r;
   }
+  
   template <typename T1, typename T2> static void push_back(T1& target, const T2& source) {
     for (typename T2::const_iterator si = source.begin();
 	 si != source.end();
@@ -39,9 +40,33 @@ struct incline_util {
       target.push_back(prefix + *si);
     }
   }
+  
+  class filter_func_t {
+  protected:
+    std::string (*f_)(const std::string& s);
+  public:
+    filter_func_t(std::string (*f)(const std::string&)) : f_(f) {}
+    virtual ~filter_func_t();
+    virtual std::string operator()(const std::string& s) const {
+      return f_ != NULL ? (*f_)(s) : s;
+    }
+  };
+  
+  class rewrite_prefix : public filter_func_t {
+  protected:
+    std::string orig_, repl_;
+  public:
+    rewrite_prefix(const std::string& orig, const std::string& repl) : filter_func_t(NULL), orig_(orig), repl_(repl) {}
+    virtual ~rewrite_prefix() {}
+    virtual std::string operator()(const std::string& s) const;
+  };
+  
+  static std::vector<std::string> filter(const filter_func_t& func, const std::vector<std::string>& list);
+  static std::map<std::string, std::string> filter(const filter_func_t& keyfunc, const filter_func_t& valuefunc, const std::map<std::string, std::string>& map);
   static std::string filter(const char* fmt, int idx, size_t n, ...);
   static std::vector<std::string> filter(const char* fmt, const std::vector<std::string>& list);
   static std::vector<std::string> filter(const char* fmt, const std::map<std::string, std::string>& map);
+  
   static bool is_one_of(const char* dnt, const char* cmp) {
     for (; *dnt != '\0'; dnt += strlen(dnt) + 1) {
       if (strcmp(dnt, cmp) == 0) {

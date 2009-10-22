@@ -4,6 +4,43 @@
 
 using namespace std;
 
+incline_util::filter_func_t::~filter_func_t()
+{
+}
+
+string
+incline_util::rewrite_prefix::operator()(const string& s) const
+{
+  return s.substr(0, orig_.size()) == orig_
+    ? repl_ + s.substr(orig_.size()) : s;
+}
+
+vector<string>
+incline_util::filter(const filter_func_t& func, const vector<string>& list)
+{
+  vector<string> r;
+  for (vector<string>::const_iterator li = list.begin();
+       li != list.end();
+       ++li) {
+    r.push_back(func(*li));
+  }
+  return r;
+}
+
+map<string, string>
+incline_util::filter(const filter_func_t& keyfunc,
+		     const filter_func_t& valuefunc,
+		     const map<string, string>& map)
+{
+  std::map<string, string> r;
+  for (std::map<string, string>::const_iterator mi = map.begin();
+       mi != map.end();
+       ++mi) {
+    r[keyfunc(mi->first)] = valuefunc(mi->second);
+  }
+  return r;
+}
+
 string
 incline_util::filter(const char* fmt, int idx, size_t n, ...)
 {

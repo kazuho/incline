@@ -213,6 +213,22 @@ incline_driver_standalone::_build_insert_from_def(trigger_body& body,
   if (_cond != NULL) {
     incline_util::push_back(cond, *_cond);
   }
+  
+  if (action == act_update && def->source().size() == 1) {
+    // use: UPDATE ... WHERE ...
+    string sql = "UPDATE " + dest_table + " SET "
+      + incline_util::join(",",
+			   incline_util::filter("%2=%1",
+						incline_util::filter(incline_util::rewrite_prefix(def->source()[0] + '.', "NEW."), NULL, def->npk_columns())))
+      + " WHERE "
+      + incline_util::join(" AND ",
+			   incline_util::filter("%2=%1",
+						incline_util::filter(incline_util::rewrite_prefix(def->source()[0] + '.', "NEW."), NULL, def->pk_columns())));
+    body.stmt.push_back(sql);
+    return;
+  }
+  
+  // use: SELECT (with for UPDATE if necessary)
   string query;
   bool use_update = action == act_update
     && ! incline_dbms::factory_->has_replace_into();
@@ -222,9 +238,8 @@ incline_driver_standalone::_build_insert_from_def(trigger_body& body,
     for (map<string, string>::const_iterator ci = def->columns().begin();
 	 ci != def->columns().end();
 	 ++ci) {
-      src_cols.push_back(incline_def::table_of_column(ci->first) == src_table
-			 ? "NEW" + ci->first.substr(src_table.size())
-			 : ci->first);
+      src_cols.push_back(incline_util::rewrite_prefix(src_table + '.', "NEW.")
+			 (ci->first));
       if (use_update) {
 	src_cols.back() += " AS _" + ci->second;
       }
