@@ -294,7 +294,7 @@ incline_driver_standalone::_build_insert_from_def(trigger_body& body,
 			   incline_util::filter("%2=srow._%2",
 						def->pk_columns()));
     body.var.push_back("srow RECORD");
-    body.stmt.push_back("FOR srow IN " + query + "  LOOP\\");
+    body.stmt.push_back("FOR srow IN " + query + " LOOP\\");
     body.stmt.push_back(sql);
     body.stmt.push_back("END LOOP");
   }

@@ -27,7 +27,7 @@ incline_driver_async::_build_insert_from_def(trigger_body& body,
     if (strncmp(de_col.c_str(), "NEW.", 4) == 0) {
       body.stmt.push_back("IF (" + do_build_direct_expr(de_col) + ") THEN\\");
       super::_build_insert_from_def(body, def, src_table, action, cond);
-      body.stmt.push_back("ELSE\\");
+      body.stmt.push_back("ELSE");
       do_build_enqueue_insert_sql(body, def, src_table, action, cond);
       body.stmt.push_back("END IF");
     } else {
@@ -62,7 +62,7 @@ incline_driver_async::_build_delete_from_def(trigger_body& body,
     if (strncmp(de_col.c_str(), "OLD.", 4) == 0) {
       body.stmt.push_back("IF (" + do_build_direct_expr(de_col) + ") THEN\\");
       super::_build_delete_from_def(body, def, src_table, cond);
-      body.stmt.push_back("ELSE\\");
+      body.stmt.push_back("ELSE");
       do_build_enqueue_delete_sql(body, def, src_table, NULL);
       body.stmt.push_back("END IF");
     } else {

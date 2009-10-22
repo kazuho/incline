@@ -144,14 +144,20 @@ incline_mgr::build_trigger_stmt(const string& src_table, const string& event,
        ++vi) {
     funcvar += "  " + *vi + ";\n";
   }
+  string indent = "  ";
   for (vector<string>::const_iterator bi = body.stmt.begin();
        bi != body.stmt.end();
        ++bi) {
-    funcbody += "  ";
     if (! bi->empty() && (*bi)[bi->size() - 1] == '\\') {
-      funcbody += bi->substr(0, bi->size() - 1) + "\n";
+      funcbody += indent + bi->substr(0, bi->size() - 1) + "\n";
+      indent += "  ";
+    } else if (bi->substr(0, 4) == "ELSE") {
+      funcbody += indent.substr(2) + *bi + "\n";
     } else {
-      funcbody += *bi + ";\n";
+      if (bi->substr(0, 4) == "END ") {
+	indent = indent.substr(2);
+      }
+      funcbody += indent + *bi + ";\n";
     }
   }
   return
