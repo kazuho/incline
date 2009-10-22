@@ -245,7 +245,7 @@ incline_driver_standalone::_build_insert_from_def(trigger_body& body,
       }
     }
     query = "SELECT " + incline_util::join(',', src_cols);
-    if (extra_columns != NULL) {
+    if (! use_update && extra_columns != NULL) {
       query += ","
 	+ incline_util::join(',', incline_util::filter("%2", *extra_columns));
     }
@@ -282,12 +282,14 @@ incline_driver_standalone::_build_insert_from_def(trigger_body& body,
     body.stmt.push_back(sql);
   } else {
     // postgresql
-    string sql = "UPDATE " + dest_table + " SET ("
-      + incline_util::join(',', incline_util::filter("%2", def->npk_columns()))
-      + ")=("
-      + incline_util::join(',',
-			   incline_util::filter("srow._%2", def->npk_columns()))
-      + ") WHERE "
+    string sql = "UPDATE " + dest_table + " SET "
+      + incline_util::join(',', incline_util::filter("%2=srow._%2", def->npk_columns()));
+    if (extra_columns != NULL) {
+      sql += ","
+	+ incline_util::join(',',
+			     incline_util::filter("%1=%2", *extra_columns));
+    }
+    sql += " WHERE "
       + incline_util::join(" AND ",
 			   incline_util::filter("%2=srow._%2",
 						def->pk_columns()));
