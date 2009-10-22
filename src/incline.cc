@@ -17,9 +17,6 @@ static getoptpp::opt_str opt_source('s', "source", true, "definition file");
 static getoptpp::opt_str opt_forwarder_log_file(0, "forwarder-log-file", false,
 						"", "");
 
-static getoptpp::opt_str opt_shard_source('S', "shard-source", false,
-					  "shard definition file", "");
-
 static incline_mgr* mgr = NULL;
 
 static void run_all_stmt(incline_dbms* dbh, const vector<string>& stmt)
@@ -130,18 +127,9 @@ main(int argc, char** argv)
   
   // parse sharded_source
   if (*opt_mode == "shard") {
-    if (opt_shard_source->empty()) {
-      cerr << "no --shard-source" << endl;
-      exit(1);
-    }
-    string err = shard_driver()->parse_shard_def(*opt_shard_source);
-    if (! err.empty()) {
-      cerr << err << endl;
-      exit(3);
-    }
     pair<string, unsigned short>
       hostport(incline_dbms::factory_->get_hostport());
-    err = shard_driver()->set_hostport(hostport.first, hostport.second);
+    string err = shard_driver()->init(hostport.first, hostport.second);
     if (! err.empty()) {
       cerr << err << endl;
       exit(3);

@@ -12,6 +12,9 @@
     "merge"       : {
       "incline_cal.id" : "incline_cal_member.cal_id"
     },
-    "shard-key"   : "_user_id"
+    "shard"       : {
+      "key"  : "_user_id",
+      "file" : "example/shard-hash.json"
+    }
   }
 ]

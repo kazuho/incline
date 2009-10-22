@@ -9,6 +9,9 @@
     "merge"       : {
       "incline_tweet.user_id" : "incline_follow.followee"
     },
-    "shard-key"   : "user_id"
+    "shard"       : {
+      "key"  : "user_id",
+      "file" : "example/shard-range.json"
+    }
   }
 ]

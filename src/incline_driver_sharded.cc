@@ -58,24 +58,7 @@ namespace incline_driver_sharded_ns {
     // lower_bound => hostport
     map<KEYTYPE, incline_driver_sharded::connect_params> lb_connect_params_;
   public:
-    virtual string parse(const picojson::value& def) {
-      const picojson::value& map = def.get("map");
-      if (! map.is<picojson::object>()) {
-	return "map is not of type object";
-      }
-      for (picojson::object::const_iterator mi
-	     = map.get<picojson::object>().begin();
-	   mi != map.get<picojson::object>().end();
-	   ++mi) {
-	incline_driver_sharded::connect_params params;
-	string err = params.parse(mi->second);
-	if (! err.empty()) {
-	  return err;
-	}
-	lb_connect_params_[str_to_key_type<KEYTYPE>()(mi->first)] = params;
-      }
-      return string();
-    }
+    range_rule(const string& file) : rule(file) {}
     virtual vector<incline_driver_sharded::connect_params>
     get_all_connect_params() const {
       vector<incline_driver_sharded::connect_params> r;
@@ -103,7 +86,7 @@ namespace incline_driver_sharded_ns {
 	::const_iterator i
 	= lb_connect_params_.upper_bound(str_to_key_type<KEYTYPE>()(key));
       return i == lb_connect_params_.begin()
-	? incline_driver_sharded::connect_params() : (--i)->second;
+	? incline_driver_sharded::connect_params(file()) : (--i)->second;
     }
     virtual string build_expr_for(const string& column_expr, const string& host,
 				  unsigned short port) const {
@@ -127,6 +110,30 @@ namespace incline_driver_sharded_ns {
       assert(! cond.empty()); // hostport not found
       return '(' + incline_util::join(" OR ", cond) + ')';
     }
+  protected:
+    virtual string parse(const picojson::value& def) {
+      const picojson::value& map = def.get("map");
+      if (! map.is<picojson::object>()) {
+	return "map is not of type object";
+      }
+      for (picojson::object::const_iterator mi
+	     = map.get<picojson::object>().begin();
+	   mi != map.get<picojson::object>().end();
+	   ++mi) {
+	incline_driver_sharded::connect_params params(file());
+	string err = params.parse(mi->second);
+	if (! err.empty()) {
+	  return err;
+	}
+	if (! (lb_connect_params_
+	       .insert(make_pair(str_to_key_type<KEYTYPE>()(mi->first),
+				 params))
+	       .second)) {
+	  return "key collision found in file: " + file();
+	}
+      }
+      return string();
+    }
   };
   
   class hash_int_rule : public incline_driver_sharded::rule {
@@ -134,30 +141,7 @@ namespace incline_driver_sharded_ns {
     // connect_params_[key % connect_params_.size()]
     vector<incline_driver_sharded::connect_params> connect_params_;
   public:
-    virtual string parse(const picojson::value& def) {
-      if (! def.get("num").is<double>()) {
-	return "``num'' field does not exist in hash partitioning rule";
-      }
-      const picojson::value& nodes = def.get("nodes");
-      if (! nodes.is<picojson::array>()) {
-	return "``nodes'' array not defined in hash partition rule";
-      }
-      for (picojson::array::const_iterator ni
-	     = nodes.get<picojson::array>().begin();
-	   ni != nodes.get<picojson::array>().end();
-	   ++ni) {
-	incline_driver_sharded::connect_params params;
-	string err = params.parse(*ni);
-	if (! err.empty()) {
-	  return err;
-	}
-	connect_params_.push_back(params);
-      }
-      if (def.get("num").get<double>() != connect_params_.size()) {
-	return "number of nodes does not match the value specified in ``num'' field";
-      }
-      return string();
-    }
+    hash_int_rule(const string& file) : rule(file) {}
     virtual vector<incline_driver_sharded::connect_params>
     get_all_connect_params() const {
       vector<incline_driver_sharded::connect_params> r;
@@ -199,6 +183,31 @@ namespace incline_driver_sharded_ns {
       assert(! cond.empty()); // hostport not found
       return '(' + incline_util::join(" OR ", cond) + ')';
     }
+  protected:
+    virtual string parse(const picojson::value& def) {
+      if (! def.get("num").is<double>()) {
+	return "``num'' field does not exist in hash partitioning rule";
+      }
+      const picojson::value& nodes = def.get("nodes");
+      if (! nodes.is<picojson::array>()) {
+	return "``nodes'' array not defined in hash partition rule";
+      }
+      for (picojson::array::const_iterator ni
+	     = nodes.get<picojson::array>().begin();
+	   ni != nodes.get<picojson::array>().end();
+	   ++ni) {
+	incline_driver_sharded::connect_params params(file());
+	string err = params.parse(*ni);
+	if (! err.empty()) {
+	  return err;
+	}
+	connect_params_.push_back(params);
+      }
+      if (def.get("num").get<double>() != connect_params_.size()) {
+	return "number of nodes does not match the value specified in ``num'' field";
+      }
+      return string();
+    }
   };
   
 }
@@ -239,72 +248,99 @@ incline_driver_sharded::connect_params::parse(const picojson::value& _def)
   return string();
 }
 
-incline_def*
-incline_driver_sharded::create_def() const
+incline_driver_sharded::rule*
+incline_driver_sharded::rule::parse(const string& file, string& err)
 {
-  return new incline_def_sharded();
-}
-
-bool
-incline_driver_sharded::should_exit_loop() const
-{
-  if (mtime_of_shard_def_file_ != _get_mtime_of_shard_def_file()) {
-    cerr << "detected update of shard definition file, exitting..." << endl;
-    return true;
-  }
-  return false;
-}
-
-string
-incline_driver_sharded::parse_shard_def(const string& shard_def_file)
-{
-  picojson::value shard_def;
+  picojson::value def;
   
-  // read file
-  if (shard_def_file == "-") {
-    string err = picojson::parse(shard_def, cin);
-    if (! err.empty()) {
-      return err;
-    }
-  } else {
-    shard_def_file_ = shard_def_file;
-    if ((mtime_of_shard_def_file_ = _get_mtime_of_shard_def_file()) == 0) {
-      return "failed to obtain information of file:" + shard_def_file_;
-    }
+  { // read file
     ifstream fin;
-    fin.open(shard_def_file.c_str(), ios::in);
+    fin.open(file.c_str(), ios::in);
     if (! fin.is_open()) {
-      return "failed to open file:" + shard_def_file;
+      err = "failed to open file:" + file;
+      return NULL;
     }
-    string err = picojson::parse(shard_def, fin);
-    if (! err.empty()) {
-      return err;
+    if (! (err = picojson::parse(def, fin)).empty()) {
+      return NULL;
     }
     fin.close();
   }
-  // parse json
-  if (! shard_def.is<picojson::object>()) {
-    return "definition should be ant object";
+  // check type
+  if (! def.is<picojson::object>()) {
+    err = "shard definition is not an object in file:" + file;
+    return NULL;
   }
   // get algorithm and build the rule
-  string algo = shard_def.get("algorithm").to_str();
+  string algo = def.get("algorithm").to_str();
+  rule* rule = NULL;
 #define RANGE_ALGO(id, type) \
-  if (algo == "range-" id) rule_ = new range_rule<type>()
+  if (algo == "range-" id) rule = new range_rule<type>(file)
   RANGE_ALGO("int", long long);
   RANGE_ALGO("str-case-sensitive", string);
 #undef RANGE_ALGO
-  if (algo == "hash-int") rule_ = new hash_int_rule();
-  if (rule_ == NULL) {
-    return "unknown sharding algorithm: " + algo;
+  if (algo == "hash-int") rule = new hash_int_rule(file);
+  if (rule == NULL) {
+    err = "unknown sharding algorithm: " + algo;
+    return NULL;
   }
   // build the rule
-  return rule_->parse(shard_def);
+  if (! (err = rule->parse(def)).empty()) {
+    delete rule;
+    return NULL;
+  }
+  
+  return rule;
+}
+
+bool
+incline_driver_sharded::rule::should_exit_loop() const
+{
+  return _get_file_mtime() != file_mtime_;
+}
+
+time_t
+incline_driver_sharded::rule::_get_file_mtime() const
+{
+  struct stat st;
+  if (file_.empty() || lstat(file_.c_str(), &st) != 0) {
+    return 0;
+  }
+  assert(st.st_mtime != 0); // we use mtime==0 to indicate error
+  return st.st_mtime;
+}
+
+incline_driver_sharded::~incline_driver_sharded()
+{
+  for (vector<rule*>::iterator ri = rules_.begin(); ri != rules_.end(); ++ri) {
+    delete *ri;
+  }
 }
 
 string
-incline_driver_sharded::set_hostport(const string& host, unsigned short port)
+incline_driver_sharded::init(const string& host, unsigned short port)
 {
-  vector<connect_params> all_cp = rule_->get_all_connect_params();
+  string err;
+  
+  // load all shard defs
+  for (vector<incline_def*>::const_iterator di = mgr()->defs().begin();
+       di != mgr()->defs().end();
+       ++di) {
+    string shard_file =
+      static_cast<const incline_def_sharded*>(*di)->shard_file();
+    if (rule_of(shard_file) == NULL) {
+      rule* rl = rule::parse(shard_file, err);
+      if (rl == NULL) {
+	return err;
+      }
+      rules_.push_back(rl);
+    }
+  }
+  
+  // set host and port (as well as checking collisions)
+  vector<connect_params> all_cp;
+  if (! (err = get_all_connect_params(all_cp)).empty()) {
+    return err;
+  }
   for (vector<connect_params>::const_iterator i = all_cp.begin();
        i != all_cp.end();
        ++i) {
@@ -321,10 +357,78 @@ incline_driver_sharded::set_hostport(const string& host, unsigned short port)
   return ss.str();
 }
 
-string
-incline_driver_sharded::do_build_direct_expr(const string& column_expr) const
+incline_def*
+incline_driver_sharded::create_def() const
 {
-  return rule_->build_expr_for(column_expr, cur_host_, cur_port_);
+  return new incline_def_sharded();
+}
+
+string
+incline_driver_sharded::get_all_connect_params(vector<connect_params>& all_cp) const
+{
+  for (vector<rule*>::const_iterator ri = rules_.begin();
+       ri != rules_.end();
+       ++ri) {
+    vector<connect_params> partial = (*ri)->get_all_connect_params();
+    for (vector<connect_params>::const_iterator pi = partial.begin();
+	 pi != partial.end();
+	 ++pi) {
+      for (vector<connect_params>::const_iterator ai = all_cp.begin();
+	   ai != all_cp.end();
+	   ++ai) {
+	if (pi->host == ai->host && pi->port == ai->port) {
+	  // same instance must not reappear (since it will be difficult to
+	  // divide)
+	  stringstream ss;
+	  ss << "collision found for " << pi->host << ':' << pi->port
+	     << " in files:" << ai->file << " and " << pi->file;
+	  return ss.str();
+	}
+      }
+      all_cp.push_back(*pi);
+    }
+  }
+  return string();
+}
+
+bool
+incline_driver_sharded::should_exit_loop() const
+{
+  for (vector<rule*>::const_iterator ri = rules_.begin();
+       ri != rules_.end();
+       ++ri) {
+    if ((*ri)->should_exit_loop()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const incline_driver_sharded::rule*
+incline_driver_sharded::rule_of(const string& file) const
+{  
+  // FIXME O(N)
+  for (vector<rule*>::const_iterator ri = rules_.begin();
+       ri != rules_.end();
+       ++ri) {
+    const rule* r = *ri;
+    if (r->file() == file) {
+      return r;
+    }
+  }
+  return NULL;
+}
+
+string
+incline_driver_sharded::do_build_direct_expr(const incline_def_async* _def,
+					     const string& column_expr) const
+{
+  const incline_def_sharded* def
+    = dynamic_cast<const incline_def_sharded*>(_def);
+  assert(def != NULL);
+  const rule* rl = rule_of(def->shard_file());
+  assert(rl != NULL);
+  return rl->build_expr_for(column_expr, cur_host_, cur_port_);
 }
 
 void*
@@ -448,9 +552,10 @@ incline_driver_sharded::forwarder::do_get_extra_cond()
        wi != writers.end();
        ++wi) {
     if (wi->second->is_active()) {
-      cond.push_back(mgr()->driver()->rule()
-		     ->build_expr_for(def()->direct_expr_column(),
-				      wi->first.host, wi->first.port));
+      const rule* rl = mgr()->driver()->rule_of(def()->shard_file());
+      assert(rl != NULL);
+      cond.push_back(rl->build_expr_for(def()->direct_expr_column(),
+					wi->first.host, wi->first.port));
     } else {
       has_inactive = true;
     }
@@ -466,7 +571,7 @@ incline_driver_sharded::forwarder::_setup_calls(map<fw_writer*, fw_writer_call_t
   for (vector<const vector<string>*>::const_iterator ri = rows.begin();
        ri != rows.end();
        ++ri) {
-    fw_writer* writer = mgr()->get_writer_for((**ri)[shard_col_index_]);
+    fw_writer* writer = mgr()->get_writer_for(def(), (**ri)[shard_col_index_]);
     map<fw_writer*, fw_writer_call_t*>::iterator ci = calls.lower_bound(writer);
     if (ci != calls.end() && ci->first == writer) {
       (ci->second->*target_rows)->push_back(*ri);
@@ -481,14 +586,33 @@ incline_driver_sharded::forwarder::_setup_calls(map<fw_writer*, fw_writer_call_t
   }
 }
 
+incline_driver_sharded::fw_writer*
+incline_driver_sharded::forwarder_mgr::get_writer_for(const incline_def_sharded* def, const string& key) const
+{
+  // FIXME O(N)
+  const rule* rl = driver()->rule_of(def->shard_file());
+  assert(rl != NULL);
+  connect_params cp = rl->get_connect_params_for(key);
+  for (vector<pair<connect_params, fw_writer* > >::const_iterator
+	 wi = writers_.begin();
+       wi != writers_.end();
+       ++wi) {
+    if (wi->first.host == cp.host && wi->first.port == cp.port) {
+      return wi->second;
+    }
+  }
+  assert(0);
+}
+
 void*
 incline_driver_sharded::forwarder_mgr::run()
 {
   vector<pthread_t> threads;
   
   { // create writers and start
-    vector<connect_params>
-      all_hostport(driver()->rule()->get_all_connect_params());
+    vector<connect_params> all_hostport;
+    string err = driver()->get_all_connect_params(all_hostport);
+    assert(err.empty());
     for (vector<connect_params>::const_iterator hi = all_hostport.begin();
 	 hi != all_hostport.end();
 	 ++hi) {
@@ -550,16 +674,4 @@ incline_driver_sharded::forwarder_mgr::do_create_forwarder(const incline_def_asy
 #endif
   assert(dbh != NULL);
   return new forwarder(this, def, dbh, poll_interval_);
-}
-
-time_t
-incline_driver_sharded::_get_mtime_of_shard_def_file() const
-{
-  struct stat st;
-  if (shard_def_file_.empty()
-      || lstat(shard_def_file_.c_str(), &st) != 0) {
-    return 0;
-  }
-  assert(st.st_mtime != 0); // we use mtime==0 to indicate error, there's no way
-  return st.st_mtime;
 }

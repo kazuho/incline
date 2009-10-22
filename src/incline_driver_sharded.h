@@ -9,20 +9,32 @@ public:
   typedef incline_driver_async_qtable super;
   
   struct connect_params {
+    std::string file;
     std::string host;
     unsigned short port;
     std::string username;
     std::string password;
-    connect_params() : host(), port(), username(), password() {}
+    connect_params(const std::string& f) : file(f), host(), port(), username(), password() {}
     std::string parse(const picojson::value& def);
   };
   
-  struct rule {
+  class rule {
+  protected:
+    std::string file_;
+    time_t file_mtime_;
+  public:
+    rule(const std::string& file) : file_(file), file_mtime_(_get_file_mtime()) {}
     virtual ~rule() {}
-    virtual std::string parse(const picojson::value& def) = 0;
+    std::string file() const { return file_; }
+    bool should_exit_loop() const;
     virtual std::vector<connect_params> get_all_connect_params() const = 0;
     virtual connect_params get_connect_params_for(const std::string& key) const = 0;
     virtual std::string build_expr_for(const std::string& column_expr, const std::string& host, unsigned short port) const = 0;
+  protected:
+    virtual std::string parse(const picojson::value& def) = 0;
+    time_t _get_file_mtime() const;
+  public:
+    static rule* parse(const std::string& file, std::string& err);
   };
   
   class forwarder;
@@ -82,18 +94,7 @@ public:
     const incline_driver_sharded* driver() const {
       return static_cast<const incline_driver_sharded*>(super::driver());
     }
-    fw_writer* get_writer_for(const std::string& key) const {
-      connect_params cp = driver()->rule()->get_connect_params_for(key);
-      for (std::vector<std::pair<connect_params, fw_writer*> >::const_iterator
-	     wi = writers_.begin();
-	   wi != writers_.end();
-	   ++wi) {
-	if (wi->first.host == cp.host && wi->first.port == cp.port) {
-	  return wi->second;
-	}
-      }
-      assert(0);
-    }
+    fw_writer* get_writer_for(const incline_def_sharded* def, const std::string& key) const;
     virtual void* run();
     incline_dbms* connect(const connect_params& cp);
   protected:
@@ -101,30 +102,25 @@ public:
   };
   
 protected:
-  rule* rule_;
+  std::vector<rule*> rules_;
   std::string cur_host_;
   unsigned short cur_port_;
-  std::string shard_def_file_;
-  time_t mtime_of_shard_def_file_;
 public:
-  incline_driver_sharded() : rule_(NULL), cur_host_(), cur_port_(), shard_def_file_(), mtime_of_shard_def_file_(0) {}
-  virtual ~incline_driver_sharded() {
-    delete rule_;
-  }
+  incline_driver_sharded() : rules_(), cur_host_(), cur_port_() {}
+  virtual ~incline_driver_sharded();
+  std::string init(const std::string& host, unsigned short port);
   virtual incline_def* create_def() const;
   virtual forwarder_mgr* create_forwarder_mgr(int poll_interval, int log_fd) {
     return new forwarder_mgr(this, poll_interval, log_fd);
   }
+  std::string get_all_connect_params(std::vector<connect_params>& all_cp) const;
   virtual bool should_exit_loop() const;
-  std::string parse_shard_def(const std::string& shard_def_file);
-  const rule* rule() const { return rule_; }
+  const rule* rule_of(const std::string& file) const;
   std::pair<std::string, unsigned short> get_hostport() const {
     return make_pair(cur_host_, cur_port_);
   }
-  std::string set_hostport(const std::string& host, unsigned short port);
 protected:
-  virtual std::string do_build_direct_expr(const std::string& column_expr) const;
-  time_t _get_mtime_of_shard_def_file() const;
+  virtual std::string do_build_direct_expr(const incline_def_async* def, const std::string& column_expr) const;
 };
 
 #endif

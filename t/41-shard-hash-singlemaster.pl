@@ -21,8 +21,8 @@ plan tests => 47;
 my @incline_cmd = (
     qw(src/incline),
     "--rdbms=$ENV{TEST_DBMS}",
-    qw(--mode=shard --source=example/shard-singlemaster.json),
-    qw(--shard-source=example/shard-hash.json --database=test),
+    qw(--mode=shard --source=example/shard-singlemaster-hash.json),
+    qw(--database=test),
 );
 my @db_nodes = qw/127.0.0.1:19010 127.0.0.1:19011/; # only use the first two
 my @db;
