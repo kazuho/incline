@@ -19,14 +19,17 @@ incline_mysql::factory::create(const string& host, unsigned short port,
 vector<string>
 incline_mysql::factory::create_trigger(const string& name, const string& event,
 				       const string& time, const string& table,
-				       const string& funcvar,
+				       const map<string, string>& funcvar,
 				       const string& funcbody) const
 {
   if (! funcvar.empty()) {
     throw error_t("mysql triggers do not support variable declaration");
   }
   string r = "CREATE TRIGGER " + name + ' ' + time + ' ' + event + " ON "
-    + table + " FOR EACH ROW BEGIN\n" + funcbody + "END";
+    + table + " FOR EACH ROW BEGIN\n"
+    + incline_util::join("",
+			 incline_util::filter("  DECLARE %1 %2;\n", funcvar))
+    + funcbody + "END";
   return incline_util::vectorize(r);
 }
 

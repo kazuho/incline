@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 
 class incline_def;
 class incline_driver;
@@ -14,7 +15,7 @@ namespace picojson {
 class incline_driver {
 public:
   struct trigger_body {
-    std::vector<std::string> var;
+    std::map<std::string, std::string> var; // varname => type
     std::vector<std::string> stmt;
   };
 protected:

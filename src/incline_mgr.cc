@@ -138,12 +138,7 @@ incline_mgr::build_trigger_stmt(const string& src_table, const string& event,
   if (body.stmt.empty()) {
     return vector<string>();
   }
-  string funcvar, funcbody;
-  for (vector<string>::const_iterator vi = body.var.begin();
-       vi != body.var.end();
-       ++vi) {
-    funcvar += "  " + *vi + ";\n";
-  }
+  string funcbody;
   string indent = "  ";
   for (vector<string>::const_iterator bi = body.stmt.begin();
        bi != body.stmt.end();
@@ -164,7 +159,7 @@ incline_mgr::build_trigger_stmt(const string& src_table, const string& event,
     incline_dbms::factory_->create_trigger(_build_trigger_name(src_table,
 							       event),
 					   event, trigger_time_, src_table,
-					   funcvar, funcbody);
+					   body.var, funcbody);
 }
 
 string
