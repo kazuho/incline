@@ -83,7 +83,7 @@ To keep `follower' and `timeline' tables in sync with the other two, replication
 
 The first hash defines how the `follower' tables should be kept synchronized to the `following' tables.  `Following_id' and `user_id' columns of `following' tables are mapped to `user_id' and `follower_id' columns of `follower' tables, and `follower' tables are sharded using the `user_id' column.
 
-The second hash defines how the `timeline' tables should be constructed from the `follower' tables and `tweet' tables.  In addition to the definitions of `pk_columns' and `shard-key', `merge' property of the hash defines how the two source tables should be merged (using INNER JOIN).
+The second hash defines how the `timeline' tables should be constructed from the `follower' tables and `tweet' tables.  In addition to the definitions of `pk_columns' and `shard', `merge' property of the hash defines how the two source tables should be merged (using INNER JOIN).
 
     [
       {
@@ -93,7 +93,10 @@ The second hash defines how the `timeline' tables should be constructed from the
           "following.following_id" : "user_id",
           "following.user_id"      : "follower_id"
         },
-        "shard-key"   : "user_id"
+        "shard"       : {
+          "key"  : "user_id",
+          "file" : "shard.json"
+        }
       },
       {
         "destination" : "timeline",
@@ -107,13 +110,16 @@ The second hash defines how the `timeline' tables should be constructed from the
         "merge"       : {
           "follower.user_id" : "tweet.user_id"
         },
-        "shard-key"   : "user_id"
+        "shard"       : {
+          "key"  : "user_id",
+          "file" : "shard.json"
+        }
       }
     ]
 
 =head2 WRITING THE SHARD DEFINITION FILE
 
-Another definition file is required when using incline for synchronizing database shards.  The following example represents a distributed database with four shards using range partitioning.  First node with the IP address 10.1.1.1 handles ids from 0 to 9999, second node (10.1.1.2) handles 10000 to 19999, third (10.1.1.1.3) handles 20000 to 29999, fourth (10.1.1.4) handles ids equal to or greater than 3000.
+The next step is writing a shard definition file (`shard.json' in the example above) that instructs incline to which shards the data should be transferred.  The following example represents a distributed database with four shards using range partitioning.  First node with the IP address 10.1.1.1 handles ids from 0 to 9999, second node (10.1.1.2) handles 10000 to 19999, third (10.1.1.1.3) handles 20000 to 29999, fourth (10.1.1.4) handles ids equal to or greater than 3000.
 
     {
       "algorithm" : "range-int",
@@ -160,10 +166,10 @@ The next step is to install triggers and to create queue tables using the defini
 
     % incline --rdbms=mysql --database=microblog --host=10.1.1.1 \
      --user=root --password=XXXXXXXX --mode=shard \
-     --source=replication.json --shard-source=shard.json create-queue
+     --source=replication.json create-queue
     % incline --rdbms=mysql --database=microblog --host=10.1.1.1 \
      --user=root --password=XXXXXXXX --mode=shard \
-     --source=replication.json --shard-source=shard.json create-trigger
+     --source=replication.json create-trigger
 
 The files, `replication.json' and `shard.json' should contain the definitions shown in the sections above.
 
@@ -335,9 +341,9 @@ same as C<pk_columns>, however defines relations to the non-primary-key columns 
 
 defines INNER JOIN conditions when using multiple source tables.
 
-=item "shard-key" : dest_column
+=item "shard" : { "key" : column_name, "file" : shard_definition_file }
 
-when using --mode=shard, defines the column name of the destination table used as sharding key
+when using --mode=shard, defines the column name of the destination table used as sharding key, and the shard definition file
 
 =back
 
