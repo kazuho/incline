@@ -25,7 +25,7 @@ my $meta = {
         \@authors;
     },
     license            => 'bsd',
-    distribution_type  => 'script',
+    distribution_type  => 'module',
     dynamic_config     => 0,
     configure_requires => {
         perl          => '5.008',

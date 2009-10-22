@@ -1,3 +1,8 @@
+package App::Incline;
+
+1;
+__END__
+
 =head1 NAME
 
 incline - a replicator for RDB shards
