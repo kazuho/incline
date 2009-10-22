@@ -282,7 +282,6 @@ incline_driver_standalone::_build_insert_from_def(trigger_body& body,
     body.stmt.push_back(sql);
   } else {
     // postgresql
-    // TODO do not use for loop if def->source().size() == 1
     string sql = "UPDATE " + dest_table + " SET ("
       + incline_util::join(',', incline_util::filter("%2", def->npk_columns()))
       + ")=("
