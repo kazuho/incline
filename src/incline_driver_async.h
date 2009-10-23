@@ -1,7 +1,6 @@
 #ifndef incline_driver_async_h
 #define incline_driver_async_h
 
-#include <map>
 #include "incline_driver_standalone.h"
 
 class incline_driver_async : public incline_driver_standalone {
