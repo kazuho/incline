@@ -53,12 +53,12 @@ namespace incline_driver_sharded_ns {
   };
   
   template <typename KEYTYPE> class range_rule
-    : public incline_driver_sharded::rule {
+    : public incline_driver_sharded::shard_rule {
   protected:
     // lower_bound => hostport
     map<KEYTYPE, incline_driver_sharded::connect_params> lb_connect_params_;
   public:
-    range_rule(const string& file) : rule(file) {}
+    range_rule(const string& file) : shard_rule(file) {}
     virtual vector<incline_driver_sharded::connect_params>
     get_all_connect_params() const {
       vector<incline_driver_sharded::connect_params> r;
@@ -136,12 +136,12 @@ namespace incline_driver_sharded_ns {
     }
   };
   
-  class hash_int_rule : public incline_driver_sharded::rule {
+  class hash_int_rule : public incline_driver_sharded::shard_rule {
   protected:
     // connect_params_[key % connect_params_.size()]
     vector<incline_driver_sharded::connect_params> connect_params_;
   public:
-    hash_int_rule(const string& file) : rule(file) {}
+    hash_int_rule(const string& file) : shard_rule(file) {}
     virtual vector<incline_driver_sharded::connect_params>
     get_all_connect_params() const {
       vector<incline_driver_sharded::connect_params> r;
@@ -228,7 +228,7 @@ incline_driver_sharded::connect_params::parse(const picojson::value& _def)
     if (! vi->second.is<string>()) {		  \
       return #val " is not a string";		  \
     }						  \
-    val = vi->second.get<string>();	  \
+    val = vi->second.get<string>();		  \
   }
   COPY_IF(host);
   if ((vi = defobj.find("port")) != defobj.end()) {
@@ -378,10 +378,10 @@ incline_driver_sharded::fw_writer::do_handle_calls(int)
   return NULL;
 }
 
-incline_driver_sharded::forwarder::forwarder(forwarder_mgr* mgr,
-					     const incline_def_sharded* def,
-					     incline_dbms* dbh,
-					     int poll_interval)
+incline_driver_sharded::shard_forwarder::shard_forwarder(forwarder_mgr* mgr,
+							 const incline_def_sharded* def,
+							 incline_dbms* dbh,
+							 int poll_interval)
   : super(mgr, def, dbh, poll_interval)
 {
   size_t i = 0;
@@ -399,7 +399,7 @@ incline_driver_sharded::forwarder::forwarder(forwarder_mgr* mgr,
 }
 
 bool
-incline_driver_sharded::forwarder::do_update_rows(const vector<const vector<string>*>& delete_rows, const vector<const vector<string>*>& insert_rows)
+incline_driver_sharded::shard_forwarder::do_update_rows(const vector<const vector<string>*>& delete_rows, const vector<const vector<string>*>& insert_rows)
 {
   map<fw_writer*, fw_writer_call_t*> calls;
   _setup_calls(calls, insert_rows, &fw_writer_call_t::insert_rows_);
@@ -420,7 +420,7 @@ incline_driver_sharded::forwarder::do_update_rows(const vector<const vector<stri
 }
 
 string
-incline_driver_sharded::forwarder::do_get_extra_cond()
+incline_driver_sharded::shard_forwarder::do_get_extra_cond()
 {
   vector<string> cond;
   const vector<pair<connect_params, fw_writer*> >& writers(mgr()->writers());
@@ -444,7 +444,7 @@ incline_driver_sharded::forwarder::do_get_extra_cond()
 }
 
 void
-incline_driver_sharded::forwarder::_setup_calls(map<fw_writer*, fw_writer_call_t*>& calls, const vector<const vector<string>*>& rows, vector<const vector<string>*>* fw_writer_call_t::*target_rows)
+incline_driver_sharded::shard_forwarder::_setup_calls(map<fw_writer*, fw_writer_call_t*>& calls, const vector<const vector<string>*>& rows, vector<const vector<string>*>* fw_writer_call_t::*target_rows)
 {
   for (vector<const vector<string>*>::const_iterator ri = rows.begin();
        ri != rows.end();
@@ -551,12 +551,13 @@ incline_driver_sharded::forwarder_mgr::do_create_forwarder(const incline_def_asy
   }
 #endif
   assert(dbh != NULL);
-  return new forwarder(this, def, dbh, poll_interval_);
+  // TODO return replication_forwarder when necessary
+  return new shard_forwarder(this, def, dbh, poll_interval_);
 }
 
 incline_driver_sharded::~incline_driver_sharded()
 {
-  for (vector<rule*>::iterator ri = rules_.begin(); ri != rules_.end(); ++ri) {
+  for (vector<const rule*>::iterator ri = rules_.begin(); ri != rules_.end(); ++ri) {
     delete *ri;
   }
 }
@@ -570,36 +571,36 @@ incline_driver_sharded::init(const string& host, unsigned short port)
   for (vector<incline_def*>::const_iterator di = mgr()->defs().begin();
        di != mgr()->defs().end();
        ++di) {
-    string shard_file =
-      static_cast<const incline_def_sharded*>(*di)->shard_file();
-    if (rule_of(shard_file) == NULL) {
-      rule* rl = rule::parse(shard_file, err);
-      if (rl == NULL) {
+    incline_def_sharded* def = static_cast<incline_def_sharded*>(*di);
+    string shard_file = def->shard_file();
+    const rule* rl = rule_of(shard_file);
+    if (rl == NULL) {
+      if ((rl = rule::parse(shard_file, err)) == NULL) {
 	return err;
       }
       rules_.push_back(rl);
     }
+    if (def->direct_expr_column().empty()) {
+      if (dynamic_cast<const replication_rule*>(rl) == NULL) {
+	return "TODO write error message";
+      }
+    } else {
+      if (dynamic_cast<const shard_rule*>(rl) == NULL) {
+	return "TODO write error message";
+      }
+      // TODO check if given host:port exists in list
+    }
   }
   
-  // set host and port (as well as checking collisions)
+  // build list of all destinations (as well as checking collisions)
   vector<connect_params> all_cp;
   if (! (err = get_all_connect_params(all_cp)).empty()) {
     return err;
   }
-  for (vector<connect_params>::const_iterator i = all_cp.begin();
-       i != all_cp.end();
-       ++i) {
-    if (i->host == host && i->port == port) {
-      cur_host_ = host;
-      cur_port_ = port;
-      return string();
-    }
-  }
-  // not found
-  stringstream ss;
-  ss << "specified database does not exist in shard definition:" << host << ':'
-     << port;
-  return ss.str();
+  
+  cur_host_ = host;
+  cur_port_ = port;
+  return string();
 }
 
 incline_def*
@@ -611,7 +612,7 @@ incline_driver_sharded::create_def() const
 string
 incline_driver_sharded::get_all_connect_params(vector<connect_params>& all_cp) const
 {
-  for (vector<rule*>::const_iterator ri = rules_.begin();
+  for (vector<const rule*>::const_iterator ri = rules_.begin();
        ri != rules_.end();
        ++ri) {
     vector<connect_params> partial = (*ri)->get_all_connect_params();
@@ -639,7 +640,7 @@ incline_driver_sharded::get_all_connect_params(vector<connect_params>& all_cp) c
 bool
 incline_driver_sharded::should_exit_loop() const
 {
-  for (vector<rule*>::const_iterator ri = rules_.begin();
+  for (vector<const rule*>::const_iterator ri = rules_.begin();
        ri != rules_.end();
        ++ri) {
     if ((*ri)->should_exit_loop()) {
@@ -653,7 +654,7 @@ const incline_driver_sharded::rule*
 incline_driver_sharded::rule_of(const string& file) const
 {  
   // FIXME O(N)
-  for (vector<rule*>::const_iterator ri = rules_.begin();
+  for (vector<const rule*>::const_iterator ri = rules_.begin();
        ri != rules_.end();
        ++ri) {
     const rule* r = *ri;
@@ -662,6 +663,50 @@ incline_driver_sharded::rule_of(const string& file) const
     }
   }
   return NULL;
+}
+
+void
+incline_driver_sharded::_build_insert_from_def(trigger_body& body,
+					       const incline_def* _def,
+					       const string& src_table,
+					       action_t action,
+					       const vector<string>* cond) const
+{
+  const incline_def_sharded* def
+    = dynamic_cast<const incline_def_sharded*>(_def);
+  assert(def != NULL);
+  if (_is_source_host_of(def)) {
+    super::_build_insert_from_def(body, def, src_table, action, cond);
+  }
+}
+
+void
+incline_driver_sharded::_build_delete_from_def(trigger_body& body,
+					       const incline_def* _def,
+					       const string& src_table,
+					       const vector<string>& cond) const
+{
+  const incline_def_sharded* def
+    = dynamic_cast<const incline_def_sharded*>(_def);
+  assert(def != NULL);
+  if (_is_source_host_of(def)) {
+    super::_build_delete_from_def(body, def, src_table, cond);
+  }
+}
+
+void
+incline_driver_sharded::_build_update_merge_from_def(trigger_body& body,
+						     const incline_def* _def,
+						     const string& src_table,
+						     const vector<string>& cond)
+  const
+{
+  const incline_def_sharded* def
+    = dynamic_cast<const incline_def_sharded*>(_def);
+  assert(def != NULL);
+  if (_is_source_host_of(def)) {
+    super::_build_update_merge_from_def(body, def, src_table, cond);
+  }
 }
 
 string
@@ -674,4 +719,26 @@ incline_driver_sharded::do_build_direct_expr(const incline_def_async* _def,
   const rule* rl = rule_of(def->shard_file());
   assert(rl != NULL);
   return rl->build_expr_for(column_expr, cur_host_, cur_port_);
+}
+
+bool
+incline_driver_sharded::_is_source_host_of(const incline_def_sharded* def) const
+{
+  const rule* rule = rule_of(def->shard_file());
+  assert(rule != NULL);
+  vector<connect_params> cp = rule->get_all_connect_params();
+  for (vector<connect_params>::const_iterator ci = cp.begin();
+       ci != cp.end();
+       ++ci) {
+    if (dynamic_cast<const shard_rule*>(rule) != NULL) {
+      if (ci->host == cur_host_ && ci->port == cur_port_) {
+	return true;
+      }
+    } else if (dynamic_cast<const replication_rule*>(rule) != NULL) {
+      // TODO check if I am the source host
+    } else {
+      assert(0);
+    }
+  }
+  return false;
 }

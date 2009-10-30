@@ -28,7 +28,10 @@ incline_def_sharded::do_parse_property(const string& name,
       return "property \"shard\" of table:" + destination()
 	+ " is not an object";
     }
-    set_direct_expr_column(value.get("key").to_str());
+    const picojson::value& key = value.get("key");
+    if (! key.is<picojson::null>()) {
+      set_direct_expr_column(key.to_str());
+    }
     shard_file_ = value.get("file").to_str();
   } else {
     return super::do_parse_property(name, value);

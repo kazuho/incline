@@ -342,7 +342,7 @@ incline_driver_async_qtable::forwarder::insert_rows(incline_dbms* dbh,
     sql += "),(";
   }
   sql.erase(sql.size() - 2);
-  mgr_->log_sql(sql);
+  mgr_->log_sql(dbh, sql);
   dbh->execute(sql);
 }
 
@@ -357,7 +357,7 @@ incline_driver_async_qtable::forwarder::delete_rows(incline_dbms* dbh,
     conds.push_back("(" + _build_pk_cond(dbh, dest_pk_columns_, **pi) + ')');
   }
   string sql = delete_row_query_base_ + incline_util::join(" OR ", conds);
-  mgr_->log_sql(sql);
+  mgr_->log_sql(dbh, sql);
   dbh->execute(sql);
 }
 
@@ -403,15 +403,20 @@ incline_driver_async_qtable::forwarder_mgr::run()
 }
 
 void
-incline_driver_async_qtable::forwarder_mgr::log_sql(const string& sql)
+incline_driver_async_qtable::forwarder_mgr::log_sql(const incline_dbms* dbms,
+						    const string& sql)
 {
   if (log_fd_ != -1) {
-    struct iovec vec[2];
-    vec[0].iov_base = const_cast<char*>(sql.c_str());
-    vec[0].iov_len = sql.size();
-    vec[1].iov_base = const_cast<char*>(";\n");
-    vec[1].iov_len = 2;
-    writev(log_fd_, vec, 2);
+    struct iovec vec[3];
+    char buf[1024];
+    snprintf(buf, sizeof(buf), "%s:%hu:", dbms->host().c_str(), dbms->port());
+    vec[0].iov_base = buf;
+    vec[0].iov_len = strlen(buf);
+    vec[1].iov_base = const_cast<char*>(sql.c_str());
+    vec[1].iov_len = sql.size();
+    vec[2].iov_base = const_cast<char*>(";\n");
+    vec[2].iov_len = 2;
+    writev(log_fd_, vec, sizeof(vec) / sizeof(vec[0]));
   }
 }
 

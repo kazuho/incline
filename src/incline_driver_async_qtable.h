@@ -29,13 +29,12 @@ public:
     forwarder_mgr* mgr() { return mgr_; }
     const incline_def_async_qtable* def() const { return def_; }
     void* run();
-  protected:
     // should perform DELETE, then (INSERT|REPLACE)
     virtual bool do_update_rows(const std::vector<const std::vector<std::string>*>& delete_rows, const std::vector<const std::vector<std::string>*>& insert_rows);
-    virtual std::string do_get_extra_cond();
-  protected:
     void insert_rows(incline_dbms* dbh, const std::vector<const std::vector<std::string>*>& rows) const;
     void delete_rows(incline_dbms* dbh, const std::vector<const std::vector<std::string>*>& rows) const;
+  protected:
+    virtual std::string do_get_extra_cond();
   public:
     static std::vector<const std::vector<std::string>*> ____to_ptr_rows(const std::vector<std::vector<std::string> >& input) {
       std::vector<const std::vector<std::string>*> r;
@@ -61,7 +60,7 @@ public:
     virtual ~forwarder_mgr() {}
     const incline_driver_async_qtable* driver() const { return driver_; }
     virtual void* run();
-    void log_sql(const std::string& sql);
+    void log_sql(const incline_dbms* dbh, const std::string& sql);
   protected:
     virtual forwarder* do_create_forwarder(const incline_def_async_qtable* def);
   };

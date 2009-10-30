@@ -37,7 +37,16 @@ public:
     static rule* parse(const std::string& file, std::string& err);
   };
   
-  class forwarder;
+  class shard_rule : public rule {
+  public:
+    shard_rule(const std::string& file) : rule(file) {}
+  };
+  
+  class replication_rule : public rule {
+  public:
+    replication_rule(const std::string& file) : rule(file) {}
+  };
+  
   class forwarder_mgr;
   
   struct fw_writer_call_t {
@@ -60,14 +69,13 @@ public:
     void* do_handle_calls(int);
   };
 
-  class forwarder : public incline_driver_async_qtable::forwarder {
-    friend class fw_writer;
+  class shard_forwarder : public incline_driver_async_qtable::forwarder {
   public:
     typedef incline_driver_async_qtable::forwarder super;
   protected:
     size_t shard_col_index_; // used for replace and delete, they are the same
   public:
-    forwarder(forwarder_mgr* mgr, const incline_def_sharded* def, incline_dbms* dbh, int poll_interval);
+    shard_forwarder(forwarder_mgr* mgr, const incline_def_sharded* def, incline_dbms* dbh, int poll_interval);
     const forwarder_mgr* mgr() const {
       return static_cast<const forwarder_mgr*>(super::mgr());
     }
@@ -102,7 +110,7 @@ public:
   };
   
 protected:
-  std::vector<rule*> rules_;
+  std::vector<const rule*> rules_;
   std::string cur_host_;
   unsigned short cur_port_;
 public:
@@ -120,7 +128,11 @@ public:
     return make_pair(cur_host_, cur_port_);
   }
 protected:
+  virtual void _build_insert_from_def(trigger_body& body, const incline_def* def, const std::string& src_table, action_t action, const std::vector<std::string>* cond) const;
+  virtual void _build_delete_from_def(trigger_body& body, const incline_def* def, const std::string& src_table, const std::vector<std::string>& cond) const;
+  virtual void _build_update_merge_from_def(trigger_body& body, const incline_def* def, const std::string& src_table, const std::vector<std::string>& cond) const;
   virtual std::string do_build_direct_expr(const incline_def_async* def, const std::string& column_expr) const;
+  bool _is_source_host_of(const incline_def_sharded* def) const;
 };
 
 #endif
