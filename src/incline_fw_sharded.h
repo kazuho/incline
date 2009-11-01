@@ -54,7 +54,6 @@ public:
   const manager* mgr() const { return static_cast<const manager*>(super::mgr()); }
   manager* mgr() { return static_cast<manager*>(super::mgr()); }
   const incline_def_sharded* def() const { return static_cast<const incline_def_sharded*>(super::def()); }
-  const incline_driver_sharded* driver() const { return static_cast<const incline_driver_sharded*>(mgr()->driver()); }
 protected:
   virtual bool do_update_rows(const std::vector<std::vector<std::string> >& delete_rows, const std::vector<std::vector<std::string> >& insert_rows);
   virtual std::string do_get_extra_cond();
