@@ -8,6 +8,7 @@ extern "C" {
 #include "incline_dbms.h"
 #include "incline_def_sharded.h"
 #include "incline_driver_sharded.h"
+#include "incline_fw_sharded.h"
 #include "incline_mgr.h"
 #include "incline_util.h"
 
@@ -248,6 +249,12 @@ incline_driver_sharded::connect_params::parse(const picojson::value& _def)
   return string();
 }
 
+incline_dbms*
+incline_driver_sharded::connect_params::connect()
+{
+  return incline_dbms::factory_->create(host, port, username, password);
+}
+
 incline_driver_sharded::rule*
 incline_driver_sharded::rule::parse(const string& file, string& err)
 {
@@ -309,250 +316,20 @@ incline_driver_sharded::rule::_get_file_mtime() const
   return st.st_mtime;
 }
 
-void*
-incline_driver_sharded::fw_writer::do_handle_calls(int)
-{
-  incline_dbms* dbh = NULL;
-  
-  while (! terminate_requested()) {
-    // get data to handle
-    slot_t& slot = get_slot();
-    if (slot.empty()) {
-      continue;
-    }
-    // connect to db if necessary
-    if (dbh == NULL && (retry_at_ == 0 || retry_at_ <= time(NULL))) {
-      try {
-	dbh = mgr_->connect(connect_params_);
-	retry_at_ = 0;
-      } catch (incline_dbms::error_t& err) {
-	// failed to (re)connect
-	cerr << err.what() << endl;
-	retry_at_ = time(NULL) + 10;
-      }
-    }
-    if (dbh == NULL) {
-      // not connected, return immediately
-      continue;
-    }
-    // commit data
-    bool use_transaction = true;
-    if (slot.size() == 1) {
-      fw_writer_call_t* req = slot.front()->request();
-      if (req->insert_rows_->empty() || req->delete_rows_->empty()) {
-	use_transaction = false;
-      }
-    }
-    try {
-      if (use_transaction) {
-	dbh->execute("BEGIN");
-      }
-      for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
-	fw_writer_call_t* req = (*si)->request();
-	// the order: DELETE -> INSERT is requpired by driver_async_qtable
-	if (! req->delete_rows_->empty()) {
-	  req->forwarder_->delete_rows(dbh, *req->delete_rows_);
-	}
-	if (! req->insert_rows_->empty()) {
-	  req->forwarder_->insert_rows(dbh, *req->insert_rows_);
-	}
-      }
-      if (use_transaction) {
-	dbh->execute("COMMIT");
-      }
-      for (slot_t::iterator si = slot.begin(); si != slot.end(); ++si) {
-	fw_writer_call_t* req = (*si)->request();
-	req->success_ = true;
-      }
-      retry_at_ = 0; // reset so that other threads will reconnect immediately
-    } catch (incline_dbms::error_t& err) {
-      // on error, log error, disconnect
-      cerr << err.what() << endl;
-      delete dbh;
-      dbh = NULL;
-      retry_at_ = time(NULL) + 10;
-    }
-  }
-  
-  delete dbh;
-  return NULL;
-}
-
-incline_driver_sharded::shard_forwarder::shard_forwarder(forwarder_mgr* mgr,
-							 const incline_def_sharded* def,
-							 incline_dbms* dbh,
-							 int poll_interval)
-  : super(mgr, def, dbh, poll_interval)
-{
-  size_t i = 0;
-  for (map<string, string>::const_iterator pi = def->pk_columns().begin();
-       pi != def->pk_columns().end();
-       ++pi, ++i) {
-    if (pi->second == def->direct_expr_column()) {
-      shard_col_index_ = i;
-      goto FOUND;
-    }
-  }
-  assert(0);
- FOUND:
-  ;
-}
-
-bool
-incline_driver_sharded::shard_forwarder::do_update_rows(const vector<const vector<string>*>& delete_rows, const vector<const vector<string>*>& insert_rows)
-{
-  map<fw_writer*, fw_writer_call_t*> calls;
-  _setup_calls(calls, insert_rows, &fw_writer_call_t::insert_rows_);
-  _setup_calls(calls, delete_rows, &fw_writer_call_t::delete_rows_);
-  fw_writer::call(calls.begin(), calls.end());
-  bool r = true;
-  for (map<fw_writer*, fw_writer_call_t*>::iterator ci = calls.begin();
-       ci != calls.end();
-       ++ci) {
-    if (! ci->second->success_) {
-      r = false;
-    }
-    delete ci->second->insert_rows_;
-    delete ci->second->delete_rows_;
-    delete ci->second;
-  }
-  return r;
-}
-
-string
-incline_driver_sharded::shard_forwarder::do_get_extra_cond()
-{
-  vector<string> cond;
-  const vector<pair<connect_params, fw_writer*> >& writers(mgr()->writers());
-  bool has_inactive = false;
-  for (vector<pair<connect_params, fw_writer*> >::const_iterator wi
-	 = writers.begin();
-       wi != writers.end();
-       ++wi) {
-    if (wi->second->is_active()) {
-      const rule* rl = mgr()->driver()->rule_of(def()->shard_file());
-      assert(rl != NULL);
-      cond.push_back(rl->build_expr_for(def()->direct_expr_column(),
-					wi->first.host, wi->first.port));
-    } else {
-      has_inactive = true;
-    }
-  }
-  return has_inactive
-    ? (cond.empty() ? string("0") : incline_util::join(" OR ", cond))
-    : string();
-}
-
 void
-incline_driver_sharded::shard_forwarder::_setup_calls(map<fw_writer*, fw_writer_call_t*>& calls, const vector<const vector<string>*>& rows, vector<const vector<string>*>* fw_writer_call_t::*target_rows)
+incline_driver_sharded::run_forwarder(int poll_interval, int log_fd) const
 {
-  for (vector<const vector<string>*>::const_iterator ri = rows.begin();
-       ri != rows.end();
-       ++ri) {
-    fw_writer* writer = mgr()->get_writer_for(def(), (**ri)[shard_col_index_]);
-    map<fw_writer*, fw_writer_call_t*>::iterator ci = calls.lower_bound(writer);
-    if (ci != calls.end() && ci->first == writer) {
-      (ci->second->*target_rows)->push_back(*ri);
-    } else {
-      fw_writer_call_t* call
-	= new fw_writer_call_t(this, new vector<const vector<string>*>(),
-			       new vector<const vector<string>*>(),
-			       new vector<const vector<string>*>());
-      (call->*target_rows)->push_back(*ri);
-      calls.insert(ci, make_pair(writer, call));
-    }
-  }
-}
-
-incline_driver_sharded::fw_writer*
-incline_driver_sharded::forwarder_mgr::get_writer_for(const incline_def_sharded* def, const string& key) const
-{
-  // FIXME O(N)
-  const rule* rl = driver()->rule_of(def->shard_file());
-  assert(rl != NULL);
-  connect_params cp = rl->get_connect_params_for(key);
-  for (vector<pair<connect_params, fw_writer* > >::const_iterator
-	 wi = writers_.begin();
-       wi != writers_.end();
-       ++wi) {
-    if (wi->first.host == cp.host && wi->first.port == cp.port) {
-      return wi->second;
-    }
-  }
-  assert(0);
-}
-
-void*
-incline_driver_sharded::forwarder_mgr::run()
-{
+  incline_fw_sharded::manager shard_mgr(this, poll_interval, log_fd);
   vector<pthread_t> threads;
   
-  { // create writers and start
-    vector<connect_params> all_hostport;
-    string err = driver()->get_all_connect_params(all_hostport);
-    assert(err.empty());
-    for (vector<connect_params>::const_iterator hi = all_hostport.begin();
-	 hi != all_hostport.end();
-	 ++hi) {
-      fw_writer* writer = new fw_writer(this, *hi);
-      threads.push_back(start_thread(writer, 0));
-      writers_.push_back(make_pair(*hi, writer));
-    }
-  }
-
-  // super
-  super::run();
-  
-  // stop writers and exit
-  for (vector<pair<connect_params, fw_writer*> >::iterator wi
-	 = writers_.begin();
-       wi != writers_.end();
-       ++wi) {
-    wi->second->terminate();
-  }
+  // create shard forwarders and writers
+  shard_mgr.start(threads);
+  // TODO create replicators
+  // wait until all forwarder threads exit
   while (! threads.empty()) {
     pthread_join(threads.back(), NULL);
     threads.pop_back();
   }
-  
-  return NULL;
-}
-
-incline_dbms*
-incline_driver_sharded::forwarder_mgr::connect(const connect_params& cp)
-{
-  return incline_dbms::factory_->create(cp.host, cp.port, cp.username,
-					cp.password);
-}
-
-incline_driver_sharded::forwarder*
-incline_driver_sharded::forwarder_mgr::do_create_forwarder(const incline_def_async_qtable* _def)
-{
-  const incline_def_sharded* def
-    = dynamic_cast<const incline_def_sharded*>(_def);
-  assert(def != NULL);
-#if 1
-  // use username and password supplied in command line, since pacific may
-  // disable write access under credentials defined by the client, but we still
-  // want to continue transferring the modifications until the queue tables
-  // become empty
-  incline_dbms* dbh = incline_dbms::factory_->create();
-#else
-  vector<connect_params> all_cp = driver()->rule()->get_all_connect_params();
-  pair<string, unsigned short> cur_hostport = driver()->get_hostport();
-  incline_dbms* dbh = NULL;
-  for (vector<connect_params>::const_iterator i = all_cp.begin();
-       i != all_cp.end();
-       ++i) {
-    if (i->host == cur_hostport.first && i->port == cur_hostport.second) {
-      dbh = connect(*i);
-      break;
-    }
-  }
-#endif
-  assert(dbh != NULL);
-  // TODO return replication_forwarder when necessary
-  return new shard_forwarder(this, def, dbh, poll_interval_);
 }
 
 incline_driver_sharded::~incline_driver_sharded()

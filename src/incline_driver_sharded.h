@@ -4,6 +4,8 @@
 #include "interthr_call.h"
 #include "incline_driver_async_qtable.h"
 
+class incline_def_sharded;
+
 class incline_driver_sharded : public incline_driver_async_qtable {
 public:
   typedef incline_driver_async_qtable super;
@@ -16,6 +18,7 @@ public:
     std::string password;
     connect_params(const std::string& f) : file(f), host(), port(), username(), password() {}
     std::string parse(const picojson::value& def);
+    incline_dbms* connect();
   };
   
   class rule {
@@ -47,68 +50,6 @@ public:
     replication_rule(const std::string& file) : rule(file) {}
   };
   
-  class forwarder_mgr;
-  
-  struct fw_writer_call_t {
-    forwarder* forwarder_;
-    std::vector<const std::vector<std::string>*>* insert_rows_, * delete_rows_;
-    bool success_;
-    fw_writer_call_t(forwarder* f, std::vector<const std::vector<std::string>*>* insert_rows, std::vector<const std::vector<std::string>*>* update_rows, std::vector<const std::vector<std::string>*>* delete_rows) : forwarder_(f), insert_rows_(insert_rows), delete_rows_(delete_rows), success_(false) {}
-  };
-  
-  class fw_writer : public interthr_call_t<fw_writer, fw_writer_call_t> {
-  protected:
-    forwarder_mgr* mgr_;
-    connect_params connect_params_;
-    time_t retry_at_;
-  public:
-  fw_writer(forwarder_mgr* mgr, const connect_params& cp) : mgr_(mgr), connect_params_(cp), retry_at_(0) {}
-    bool is_active() const {
-      return retry_at_ == 0 || retry_at_ <= time(NULL);
-    }
-    void* do_handle_calls(int);
-  };
-
-  class shard_forwarder : public incline_driver_async_qtable::forwarder {
-  public:
-    typedef incline_driver_async_qtable::forwarder super;
-  protected:
-    size_t shard_col_index_; // used for replace and delete, they are the same
-  public:
-    shard_forwarder(forwarder_mgr* mgr, const incline_def_sharded* def, incline_dbms* dbh, int poll_interval);
-    const forwarder_mgr* mgr() const {
-      return static_cast<const forwarder_mgr*>(super::mgr());
-    }
-    forwarder_mgr* mgr() { return static_cast<forwarder_mgr*>(super::mgr()); }
-    const incline_def_sharded* def() const {
-      return static_cast<const incline_def_sharded*>(super::def());
-    }
-    virtual bool do_update_rows(const std::vector<const std::vector<std::string>*>& delete_rows, const std::vector<const std::vector<std::string>*>& insert_rows);
-    virtual std::string do_get_extra_cond();
-  protected:
-    void _setup_calls(std::map<fw_writer*, fw_writer_call_t*>& calls, const std::vector<const std::vector<std::string>*>& rows, std::vector<const std::vector<std::string>*>* fw_writer_call_t::*target_rows);
-  };
-  
-  class forwarder_mgr : public incline_driver_async_qtable::forwarder_mgr {
-  public:
-    typedef incline_driver_async_qtable::forwarder_mgr super;
-  protected:
-    std::vector<std::pair<connect_params, fw_writer*> > writers_;
-  public:
-    forwarder_mgr(incline_driver_sharded* driver, int poll_interval, int log_fd) : super(driver, poll_interval, log_fd), writers_() {}
-    const std::vector<std::pair<connect_params, fw_writer*> > writers() const {
-      return writers_;
-    }
-    const incline_driver_sharded* driver() const {
-      return static_cast<const incline_driver_sharded*>(super::driver());
-    }
-    fw_writer* get_writer_for(const incline_def_sharded* def, const std::string& key) const;
-    virtual void* run();
-    incline_dbms* connect(const connect_params& cp);
-  protected:
-    virtual forwarder* do_create_forwarder(const incline_def_async_qtable* def);
-  };
-  
 protected:
   std::vector<const rule*> rules_;
   std::string cur_host_;
@@ -118,9 +59,7 @@ public:
   virtual ~incline_driver_sharded();
   std::string init(const std::string& host, unsigned short port);
   virtual incline_def* create_def() const;
-  virtual forwarder_mgr* create_forwarder_mgr(int poll_interval, int log_fd) {
-    return new forwarder_mgr(this, poll_interval, log_fd);
-  }
+  virtual void run_forwarder(int poll_interval, int log_fd) const;
   std::string get_all_connect_params(std::vector<connect_params>& all_cp) const;
   virtual bool should_exit_loop() const;
   const rule* rule_of(const std::string& file) const;

@@ -5,7 +5,6 @@ extern "C" {
 #include <iostream>
 #include <iterator>
 #include "getoptpp.h"
-#include "start_thread.h"
 #include "incline_config.h"
 #include "incline.h"
 
@@ -168,10 +167,7 @@ main(int argc, char** argv)
 	exit(3);
       }
     }
-    incline_driver_async_qtable::forwarder_mgr* mgr
-      = aq_driver()->create_forwarder_mgr(1, log_fd);
-    mgr->run();
-    delete mgr;
+    aq_driver()->run_forwarder(1, log_fd);
   } else {
     fprintf(stderr, "unknown command: %s\n", command.c_str());
     exit(1);

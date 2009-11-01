@@ -3,6 +3,8 @@
 
 #include "incline_driver_standalone.h"
 
+class incline_def_async;
+
 class incline_driver_async : public incline_driver_standalone {
 public:
   typedef incline_driver_standalone super;

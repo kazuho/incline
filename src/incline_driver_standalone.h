@@ -8,12 +8,6 @@ class incline_def;
 
 class incline_driver_standalone : public incline_driver {
 public:
-  enum action_t {
-    act_insert = 'I',
-    act_update = 'U',
-    act_delete = 'D'
-  };
-public:
   virtual void insert_trigger_of(trigger_body& body, const std::string& src_table) const;
   virtual void update_trigger_of(trigger_body& body, const std::string& src_table) const;
   virtual void delete_trigger_of(trigger_body& body, const std::string& src_table) const;

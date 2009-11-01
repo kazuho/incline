@@ -14,6 +14,11 @@ namespace picojson {
 
 class incline_driver {
 public:
+  enum action_t {
+    act_insert = 'I',
+    act_update = 'U',
+    act_delete = 'D'
+  };
   struct trigger_body {
     std::map<std::string, std::string> var; // varname => type
     std::vector<std::string> stmt;
