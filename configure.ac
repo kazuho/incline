@@ -84,18 +84,18 @@ fi
 CFLAGS="$CFLAGS -Wall -g -O"
 CXXFLAGS="$CXXFLAGS -Wall -g -O"
 
-echo
-echo
-echo -n "     building with following database drivers:"
+DRIVER_MSG="     building with following database drivers:"
 if test "$WITH_MYSQL"
 then
-	echo -n " mysql"
+	DRIVER_MSG="$DRIVER_MSG mysql"
 fi
 if test "$WITH_PGSQL"
 then
-	echo -n " pgsql"
+	DRIVER_MSG="$DRIVER_MSG postgresql"
 fi
 echo
+echo
+echo $DRIVER_MSG
 echo
 echo
 
