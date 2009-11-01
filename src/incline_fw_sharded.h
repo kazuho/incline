@@ -11,9 +11,9 @@ public:
   
   struct writer_call_t {
     incline_fw_sharded* fw_;
-    std::vector<const std::vector<std::string>*>* insert_rows_, * delete_rows_;
+    std::vector<std::vector<std::string> >* insert_rows_, * delete_rows_;
     bool success_;
-    writer_call_t(incline_fw_sharded* fw, std::vector<const std::vector<std::string>*>* insert_rows, std::vector<const std::vector<std::string>*>* delete_rows) : fw_(fw), insert_rows_(insert_rows), delete_rows_(delete_rows), success_(false) {}
+    writer_call_t(incline_fw_sharded* fw, std::vector<std::vector<std::string> >* insert_rows, std::vector<std::vector<std::string> >* delete_rows) : fw_(fw), insert_rows_(insert_rows), delete_rows_(delete_rows), success_(false) {}
   };
   
   class writer : public interthr_call_t<writer, writer_call_t> {
@@ -56,9 +56,9 @@ public:
   const incline_def_sharded* def() const { return static_cast<const incline_def_sharded*>(super::def()); }
   const incline_driver_sharded* driver() const { return static_cast<const incline_driver_sharded*>(mgr()->driver()); }
 protected:
-  virtual bool do_update_rows(const std::vector<const std::vector<std::string>*>& delete_rows, const std::vector<const std::vector<std::string>*>& insert_rows);
+  virtual bool do_update_rows(const std::vector<std::vector<std::string> >& delete_rows, const std::vector<std::vector<std::string> >& insert_rows);
   virtual std::string do_get_extra_cond();
-  void _setup_calls(std::map<writer*, writer_call_t*>& calls, const std::vector<const std::vector<std::string>*>& rows, std::vector<const std::vector<std::string>*>* writer_call_t::*target_rows);  
+  void _setup_calls(std::map<writer*, writer_call_t*>& calls, const std::vector<std::vector<std::string> >& rows, std::vector<std::vector<std::string> >* writer_call_t::*target_rows);  
 };
 
 #endif

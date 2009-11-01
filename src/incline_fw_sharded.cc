@@ -187,10 +187,8 @@ incline_fw_sharded::incline_fw_sharded(manager* mgr,
 }
 
 bool
-incline_fw_sharded::do_update_rows(const vector<const vector<string>*>&
-				   delete_rows,
-				   const vector<const vector<string>*>&
-				   insert_rows)
+incline_fw_sharded::do_update_rows(const vector<vector<string> >& delete_rows,
+				   const vector<vector<string> >& insert_rows)
 {
   map<writer*, writer_call_t*> calls;
   _setup_calls(calls, insert_rows, &writer_call_t::insert_rows_);
@@ -237,21 +235,21 @@ incline_fw_sharded::do_get_extra_cond()
 
 void
 incline_fw_sharded::_setup_calls(map<writer*, writer_call_t*>& calls,
-				 const vector<const vector<string>*>& rows,
-				 vector<const vector<string>*>*
+				 const vector<vector<string> >& rows,
+				 vector<vector<string> >*
 				 writer_call_t::*target_rows)
 {
-  for (vector<const vector<string>*>::const_iterator ri = rows.begin();
+  for (vector<vector<string> >::const_iterator ri = rows.begin();
        ri != rows.end();
        ++ri) {
-    writer* wr = mgr()->get_writer_for(def(), (**ri)[shard_col_index_]);
+    writer* wr = mgr()->get_writer_for(def(), (*ri)[shard_col_index_]);
     map<writer*, writer_call_t*>::iterator ci = calls.lower_bound(wr);
     if (ci != calls.end() && ci->first == wr) {
       (ci->second->*target_rows)->push_back(*ri);
     } else {
       writer_call_t* call
-	= new writer_call_t(this, new vector<const vector<string>*>(),
-			    new vector<const vector<string>*>());
+	= new writer_call_t(this, new vector<vector<string> >(),
+			    new vector<vector<string> >());
       (call->*target_rows)->push_back(*ri);
       calls.insert(ci, make_pair(wr, call));
     }

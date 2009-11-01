@@ -70,96 +70,28 @@ incline_fw::run()
   while (! mgr_->driver()->should_exit_loop()) {
     try {
       vector<string> iq_ids;
-      vector<pair<char, vector<string> > > rows;
-      { // update fetch state
-	string new_extra_cond = do_get_extra_cond();
-	if (extra_cond != new_extra_cond) {
-	  extra_cond = new_extra_cond;
+      vector<vector<string> > delete_pks, insert_rows;
+      { // fetch rows
+	string cond = do_get_extra_cond();
+	if (cond != extra_cond) {
+	  extra_cond = cond;
 	  last_id.clear();
 	}
-      }
-      { // fetch data
-	string query = fetch_query_base_;
-	if (! extra_cond.empty()) {
-	  query += " WHERE " + extra_cond;
-	  if (! last_id.empty()) {
-	    query += " AND _iq_id>" + last_id;
+	if (! last_id.empty()) {
+	  if (! cond.empty()) {
+	    cond += " AND ";
 	  }
+	  cond += "_iq_id>" + last_id;
 	}
-	query += " ORDER BY _iq_id LIMIT 50";
-	printf("**** %s\n", query.c_str());
-	// load rows
-	vector<vector<incline_dbms::value_t> > res;
-	dbh_->query(res, query);
-	for (vector<vector<incline_dbms::value_t> >::const_iterator ri
-	       = res.begin();
-	     ri != res.end();
-	     ++ri) {
-	  iq_ids.push_back(*(*ri)[0]);
-	  incline_driver::action_t action
-	    = (incline_driver::action_t)(*(*ri)[1])[0];
-	  rows.push_back(make_pair(action, vector<string>()));
-	  for (size_t i = 0;
-	       i < (action != incline_driver::act_delete
-		    ? def_->columns().size() : def_->pk_columns().size());
-	       ++i) {
-	    rows.back().second.push_back(*(*ri)[i + 2]);
-	  }
-	}
+	fetch_rows(cond, iq_ids, delete_pks, insert_rows);
       }
       // sleep and retry if no data
-      if (rows.empty()) {
+      if (iq_ids.empty()) {
 	sleep(mgr()->poll_interval());
 	continue;
       }
       if (! extra_cond.empty()) {
 	last_id = iq_ids.back();
-      }
-      vector<const vector<string>*> insert_rows, delete_pks;
-      // fill replace_rows and delete_rows
-      // compile error gcc 4.0.1 (mac) when using const_reverse_iter
-      for (vector<pair<char, vector<string> > >::reverse_iterator ri
-	     = rows.rbegin();
-	   ri != rows.rend();
-	   ++ri) {
-	for (vector<pair<char, vector<string> > >::reverse_iterator ci
-	       = rows.rbegin();
-	     ci != ri;
-	     ++ci) {
-	  for (size_t i = 0; i < def_->pk_columns().size(); ++i) {
-	    if (ri->second[i] != ci->second[i]) {
-	      goto ROW_NOT_EQUAL;
-	    }
-	  }
-	  // modif. of same pk exists
-	  goto ROW_CHECK_END;
-	ROW_NOT_EQUAL:
-	  ;
-	}
-	// row with same pk not exists, register it
-	switch (ri->first) {
-	case incline_driver::act_insert:
-	case incline_driver::act_update:
-	  insert_rows.push_back(&ri->second);
-	  break;
-	case incline_driver::act_delete:
-	  delete_pks.push_back(&ri->second);
-	  break;
-	default:
-	  assert(0);
-	}
-      ROW_CHECK_END:
-	;
-      }
-      // add pks of insert_rows to delete_pks, if no support for replace into
-      // it works since delete is performed before insert
-      if (! incline_dbms::factory_->has_replace_into()) {
-	for (vector<const vector<string>*>::const_iterator ri
-	       = insert_rows.begin();
-	     ri != insert_rows.end();
-	     ++ri) {
-	  delete_pks.push_back(*ri);
-	}
       }
       // update and remove from queue if successful
       if (do_update_rows(delete_pks, insert_rows)) {
@@ -176,12 +108,12 @@ incline_fw::run()
 }
 
 bool
-incline_fw::do_update_rows(const vector<const vector<string>*>& delete_rows,
-			   const vector<const vector<string>*>& insert_rows)
+incline_fw::do_update_rows(const vector<vector<string> >& delete_pks,
+			   const vector<vector<string> >& insert_rows)
 {
   // the order: DELETE -> INSERT is a requirement, see above
-  if (! delete_rows.empty()) {
-    this->delete_rows(dbh_, delete_rows);
+  if (! delete_pks.empty()) {
+    this->delete_rows(dbh_, delete_pks);
   }
   if (! insert_rows.empty()) {
     this->insert_rows(dbh_, insert_rows);
@@ -200,16 +132,97 @@ incline_fw::do_post_commit(const vector<string>& iq_ids)
 {
 }
 
+// TODO should use vector<shared_ptr<vector<string> > >
 void
-incline_fw::insert_rows(incline_dbms* dbh,
-			const vector<const vector<string>*>& rows) const
+incline_fw::fetch_rows(const string& cond, vector<string>& iq_ids, vector<vector<string> >& delete_pks, vector<vector<string> >& insert_rows)
+{
+  vector<pair<char, vector<string> > > rows;
+  
+  iq_ids.clear();
+  delete_pks.clear();
+  insert_rows.clear();
+  
+  { // load rows
+    string query = fetch_query_base_;
+    if (! cond.empty()) {
+      query += " WHERE " + cond;
+    }
+    query += " ORDER BY _iq_id LIMIT 50";
+    vector<vector<incline_dbms::value_t> > res;
+    dbh_->query(res, query);
+    for (vector<vector<incline_dbms::value_t> >::const_iterator ri
+	   = res.begin();
+	 ri != res.end();
+	 ++ri) {
+      iq_ids.push_back(*(*ri)[0]);
+      incline_driver::action_t action
+	= (incline_driver::action_t)(*(*ri)[1])[0];
+      rows.push_back(make_pair(action, vector<string>()));
+      for (size_t i = 0;
+	   i < (action != incline_driver::act_delete
+		? def_->columns().size() : def_->pk_columns().size());
+	   ++i) {
+	rows.back().second.push_back(*(*ri)[i + 2]);
+      }
+    }
+  }
+  // fill replace_rows and delete_rows
+  // compile error gcc 4.0.1 (mac) when using const_reverse_iter
+  for (vector<pair<char, vector<string> > >::reverse_iterator ri
+	 = rows.rbegin();
+       ri != rows.rend();
+       ++ri) {
+    for (vector<pair<char, vector<string> > >::reverse_iterator ci
+	   = rows.rbegin();
+	 ci != ri;
+	 ++ci) {
+      for (size_t i = 0; i < def_->pk_columns().size(); ++i) {
+	if (ri->second[i] != ci->second[i]) {
+	  goto ROW_NOT_EQUAL;
+	}
+      }
+      // modif. of same pk exists
+      goto ROW_CHECK_END;
+    ROW_NOT_EQUAL:
+      ;
+    }
+    // row with same pk not exists, register it
+    switch (ri->first) {
+    case incline_driver::act_insert:
+    case incline_driver::act_update:
+      insert_rows.push_back(ri->second);
+      break;
+    case incline_driver::act_delete:
+      delete_pks.push_back(ri->second);
+      break;
+    default:
+      assert(0);
+    }
+  ROW_CHECK_END:
+    ;
+  }
+  // add pks of insert_rows to delete_pks, if no support for replace into
+  // it works since delete is performed before insert (in a single transaction)
+  if (! incline_dbms::factory_->has_replace_into()) {
+    for (vector<vector<string> >::const_iterator ri
+	   = insert_rows.begin();
+	 ri != insert_rows.end();
+	 ++ri) {
+      delete_pks.push_back(*ri);
+    }
+  }
+}
+
+void
+incline_fw::insert_rows(incline_dbms* dbh, const vector<vector<string> >& rows)
+  const
 {
   string sql = insert_row_query_base_ + '(';
-  for (vector<const vector<string>*>::const_iterator ri = rows.begin();
+  for (vector<vector<string> >::const_iterator ri = rows.begin();
        ri != rows.end();
        ++ri) {
-    for (vector<string>::const_iterator ci = (*ri)->begin();
-	 ci != (*ri)->end();
+    for (vector<string>::const_iterator ci = ri->begin();
+	 ci != ri->end();
 	 ++ci) {
       sql.push_back('\'');
       sql += dbh->escape(*ci);
@@ -225,13 +238,13 @@ incline_fw::insert_rows(incline_dbms* dbh,
 
 void
 incline_fw::delete_rows(incline_dbms* dbh,
-			const vector<const vector<string>*>& pk_rows) const
+			const vector<vector<string> >& pk_rows) const
 {
   vector<string> conds;
-  for (vector<const vector<string>*>::const_iterator pi = pk_rows.begin();
+  for (vector<vector<string> >::const_iterator pi = pk_rows.begin();
        pi != pk_rows.end();
        ++pi) {
-    conds.push_back("(" + _build_pk_cond(dbh, dest_pk_columns_, **pi) + ')');
+    conds.push_back("(" + _build_pk_cond(dbh, dest_pk_columns_, *pi) + ')');
   }
   string sql = delete_row_query_base_ + incline_util::join(" OR ", conds);
   mgr_->log_sql(dbh, sql);
