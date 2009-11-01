@@ -166,7 +166,7 @@ is_deeply(
     );
     unless ($fw_pid = fork()) {
         my ($db_host, $db_port) = split /:/, $db_nodes[0], 2;
-        exec(
+        exec_cmd(
             @incline_cmd,
             "--host=$db_host",
             "--port=$db_port",

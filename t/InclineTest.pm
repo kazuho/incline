@@ -10,7 +10,7 @@ use Test::More;
 use Test::mysqld;
 use Test::postgresql;
 
-our @EXPORT = qw(init_db adjust_ddl do_parallel push_bench);
+our @EXPORT = qw(init_db adjust_ddl do_parallel push_bench exec_cmd);
 
 sub init_db {
     my %opts = @_;
@@ -66,6 +66,16 @@ sub push_bench {
     $t->[1] = $t->[3] = $t->[0] - $t->[1];
     $t->[2] = $t->[4] = 0;
     $bench->{$n} = $bench->{$n} ? Benchmark::timesum($bench->{$n}, $t) : $t;
+}
+
+sub exec_cmd {
+    my @args = @_;
+    if ($ENV{USE_GDB}) {
+        print STDERR "*** running: ", join(' ', @args), "\n";
+        exec('gdb', shift @args);
+    } else {
+        exec @args;
+    }
 }
 
 1;

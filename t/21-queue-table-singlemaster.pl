@@ -64,7 +64,7 @@ ok(system(@incline_cmd, 'create-trigger') == 0, 'create queue');
         },
     );
     unless ($fw_pid = fork()) {
-        exec(@incline_cmd, 'forward');
+        exec_cmd(@incline_cmd, 'forward');
         die "failed to exec forwarder: $?";
     }
     
