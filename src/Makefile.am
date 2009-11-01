@@ -7,6 +7,7 @@ incline_SOURCES += incline_def_sharded.cc incline_def_sharded.h incline_driver_s
 incline_SOURCES += incline_fw.cc incline_fw.h
 incline_SOURCES += incline_fw_async_qtable.cc incline_fw_async_qtable.h
 incline_SOURCES += incline_fw_sharded.cc incline_fw_sharded.h
+incline_SOURCES += incline_fw_replicator.cc incline_fw_replicator.h
 if WITH_MYSQL
 incline_SOURCES	+= incline_mysql.cc incline_mysql.h
 endif

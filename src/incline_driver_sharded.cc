@@ -9,6 +9,7 @@ extern "C" {
 #include "incline_def_sharded.h"
 #include "incline_driver_sharded.h"
 #include "incline_fw_sharded.h"
+#include "incline_fw_replicator.h"
 #include "incline_mgr.h"
 #include "incline_util.h"
 
@@ -316,15 +317,40 @@ incline_driver_sharded::rule::_get_file_mtime() const
   return st.st_mtime;
 }
 
+string
+incline_driver_sharded::replicator_rule::parse(const picojson::value& def)
+{
+  string err;
+  connect_params source(file());
+  if (! (err = src_cp_.parse(def.get("source"))).empty()) {
+    return err;
+  }
+  const picojson::value& dest = def.get("destination");
+  if (! dest.is<picojson::array>()) {
+    return "destination is not of type array";
+  }
+  for (picojson::array::const_iterator di = dest.get<picojson::array>().begin();
+       di != dest.get<picojson::array>().end();
+       ++di) {
+    connect_params cp(file());
+    if (! (err = cp.parse(*di)).empty()) {
+      return err;
+    }
+    dest_cp_.push_back(cp);
+  }
+  return string();
+}
+
 void
 incline_driver_sharded::run_forwarder(int poll_interval, int log_fd) const
 {
   incline_fw_sharded::manager shard_mgr(this, poll_interval, log_fd);
+  incline_fw_replicator::manager repl_mgr(this, poll_interval, log_fd);
   vector<pthread_t> threads;
   
-  // create shard forwarders and writers
+  // create forwarders and writers
   shard_mgr.start(threads);
-  // TODO create replicators
+  repl_mgr.start(threads);
   // wait until all forwarder threads exit
   while (! threads.empty()) {
     pthread_join(threads.back(), NULL);
@@ -358,21 +384,43 @@ incline_driver_sharded::init(const string& host, unsigned short port)
       rules_.push_back(rl);
     }
     if (def->direct_expr_column().empty()) {
-      if (dynamic_cast<const replication_rule*>(rl) == NULL) {
-	return "TODO write error message";
+      if (dynamic_cast<const replicator_rule*>(rl) == NULL) {
+	return "no shard.key defined for table:" + def->destination();
       }
     } else {
       if (dynamic_cast<const shard_rule*>(rl) == NULL) {
-	return "TODO write error message";
+	return "shard.key should not be defined fo table:" + def->destination()
+	  + " using replicator rule";
       }
-      // TODO check if given host:port exists in list
     }
   }
   
-  // build list of all destinations (as well as checking collisions)
-  vector<connect_params> all_cp;
-  if (! (err = get_all_connect_params(all_cp)).empty()) {
-    return err;
+  {
+    // check collision of shard nodes (same instance must not reappear, since
+    // the node will be difficult to divide)
+    vector<connect_params> all_cp;
+    for (vector<const rule*>::const_iterator ri = rules_.begin();
+	 ri != rules_.end();
+	 ++ri) {
+      if (const shard_rule* srl = dynamic_cast<const shard_rule*>(*ri)) {
+	vector<connect_params> partial = srl->get_all_connect_params();
+	for (vector<connect_params>::const_iterator pi = partial.begin();
+	     pi != partial.end();
+	     ++pi) {
+	  for (vector<connect_params>::const_iterator ai = all_cp.begin();
+	       ai != all_cp.end();
+	       ++ai) {
+	    if (pi->host == ai->host && pi->port == ai->port) {
+	      stringstream ss;
+	      ss << "collision found for " << pi->host << ':' << pi->port
+		 << " in files:" << ai->file << " and " << pi->file;
+	      return ss.str();
+	    }
+	  }
+	  all_cp.push_back(*pi);
+	}
+      }
+    }
   }
   
   cur_host_ = host;
@@ -384,34 +432,6 @@ incline_def*
 incline_driver_sharded::create_def() const
 {
   return new incline_def_sharded();
-}
-
-string
-incline_driver_sharded::get_all_connect_params(vector<connect_params>& all_cp) const
-{
-  for (vector<const rule*>::const_iterator ri = rules_.begin();
-       ri != rules_.end();
-       ++ri) {
-    vector<connect_params> partial = (*ri)->get_all_connect_params();
-    for (vector<connect_params>::const_iterator pi = partial.begin();
-	 pi != partial.end();
-	 ++pi) {
-      for (vector<connect_params>::const_iterator ai = all_cp.begin();
-	   ai != all_cp.end();
-	   ++ai) {
-	if (pi->host == ai->host && pi->port == ai->port) {
-	  // same instance must not reappear (since it will be difficult to
-	  // divide)
-	  stringstream ss;
-	  ss << "collision found for " << pi->host << ':' << pi->port
-	     << " in files:" << ai->file << " and " << pi->file;
-	  return ss.str();
-	}
-      }
-      all_cp.push_back(*pi);
-    }
-  }
-  return string();
 }
 
 bool
@@ -495,27 +515,29 @@ incline_driver_sharded::do_build_direct_expr(const incline_def_async* _def,
   assert(def != NULL);
   const rule* rl = rule_of(def->shard_file());
   assert(rl != NULL);
-  return rl->build_expr_for(column_expr, cur_host_, cur_port_);
+  const shard_rule* srl = dynamic_cast<const shard_rule*>(rl);
+  assert(srl != NULL);
+  return srl->build_expr_for(column_expr, cur_host_, cur_port_);
 }
 
 bool
 incline_driver_sharded::_is_source_host_of(const incline_def_sharded* def) const
 {
-  const rule* rule = rule_of(def->shard_file());
-  assert(rule != NULL);
-  vector<connect_params> cp = rule->get_all_connect_params();
-  for (vector<connect_params>::const_iterator ci = cp.begin();
-       ci != cp.end();
-       ++ci) {
-    if (dynamic_cast<const shard_rule*>(rule) != NULL) {
+  const rule* rl = rule_of(def->shard_file());
+  assert(rl != NULL);
+  if (const shard_rule* srl = dynamic_cast<const shard_rule*>(rl)) {
+    vector<connect_params> cp = srl->get_all_connect_params();
+    for (vector<connect_params>::const_iterator ci = cp.begin();
+	 ci != cp.end();
+	 ++ci) {
       if (ci->host == cur_host_ && ci->port == cur_port_) {
 	return true;
       }
-    } else if (dynamic_cast<const replication_rule*>(rule) != NULL) {
-      // TODO check if I am the source host
-    } else {
-      assert(0);
     }
+    return false;
+  } else if (const replicator_rule* rrl
+	     = dynamic_cast<const replicator_rule*>(rl)) {
+    return rrl->source().host == cur_host_ && rrl->source().port == cur_port_;
   }
-  return false;
+  assert(0);
 }

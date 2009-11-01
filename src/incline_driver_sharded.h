@@ -30,9 +30,6 @@ public:
     virtual ~rule() {}
     std::string file() const { return file_; }
     bool should_exit_loop() const;
-    virtual std::vector<connect_params> get_all_connect_params() const = 0;
-    virtual connect_params get_connect_params_for(const std::string& key) const = 0;
-    virtual std::string build_expr_for(const std::string& column_expr, const std::string& host, unsigned short port) const = 0;
   protected:
     virtual std::string parse(const picojson::value& def) = 0;
     time_t _get_file_mtime() const;
@@ -43,11 +40,21 @@ public:
   class shard_rule : public rule {
   public:
     shard_rule(const std::string& file) : rule(file) {}
+    virtual std::vector<connect_params> get_all_connect_params() const = 0;
+    virtual connect_params get_connect_params_for(const std::string& key) const = 0;
+    virtual std::string build_expr_for(const std::string& column_expr, const std::string& host, unsigned short port) const = 0;
   };
   
-  class replication_rule : public rule {
+  class replicator_rule : public rule {
+  protected:
+    connect_params src_cp_;
+    std::vector<connect_params> dest_cp_;
   public:
-    replication_rule(const std::string& file) : rule(file) {}
+    replicator_rule(const std::string& file) : rule(file), src_cp_(file), dest_cp_() {}
+    const connect_params& source() const { return src_cp_; }
+    const std::vector<connect_params>& destination() const { return dest_cp_; }
+  protected:
+    virtual std::string parse(const picojson::value& def);
   };
   
 protected:
@@ -60,7 +67,6 @@ public:
   std::string init(const std::string& host, unsigned short port);
   virtual incline_def* create_def() const;
   virtual void run_forwarder(int poll_interval, int log_fd) const;
-  std::string get_all_connect_params(std::vector<connect_params>& all_cp) const;
   virtual bool should_exit_loop() const;
   const rule* rule_of(const std::string& file) const;
   std::pair<std::string, unsigned short> get_hostport() const {

@@ -100,6 +100,15 @@ incline_fw_sharded::manager::~manager()
   }
 }
 
+const incline_driver_sharded::shard_rule*
+incline_fw_sharded::manager::rule_of(const incline_def_sharded* def) const
+{
+  const incline_driver_sharded::rule* rl = driver()->rule_of(def->shard_file());
+  return rl != NULL
+    ? dynamic_cast<const incline_driver_sharded::shard_rule*>(rl)
+    : NULL;
+}
+
 void
 incline_fw_sharded::manager::start(vector<pthread_t>& threads)
 {
@@ -111,10 +120,8 @@ incline_fw_sharded::manager::start(vector<pthread_t>& threads)
        ++di) {
     const incline_def_sharded* def
       = static_cast<const incline_def_sharded*>(*di);
-    const incline_driver_sharded::rule* rl
-      = driver()->rule_of(def->shard_file());
-    assert(rl != NULL);
-    if (dynamic_cast<const incline_driver_sharded::shard_rule*>(rl) != NULL) {
+    const incline_driver_sharded::shard_rule* rl = rule_of(def);
+    if (rl != NULL) {
       vector<incline_driver_sharded::connect_params>
 	cp(rl->get_all_connect_params());
       for (vector<incline_driver_sharded::connect_params>::const_iterator ci
@@ -154,7 +161,7 @@ incline_fw_sharded::manager::get_writer_for(const incline_def_sharded* def,
 					    const string& key) const
 {
   // FIXME O(N)
-  const incline_driver_sharded::rule* rl = driver()->rule_of(def->shard_file());
+  const incline_driver_sharded::shard_rule* rl = rule_of(def);
   assert(rl != NULL);
   incline_driver_sharded::connect_params cp = rl->get_connect_params_for(key);
   for (vector<pair<incline_driver_sharded::connect_params, writer*> >::const_iterator wi = writers_.begin();
@@ -219,8 +226,7 @@ incline_fw_sharded::do_get_extra_cond()
        wi != writers.end();
        ++wi) {
     if (wi->second->is_active()) {
-      const incline_driver_sharded::rule* rl
-	= mgr()->driver()->rule_of(def()->shard_file());
+      const incline_driver_sharded::shard_rule* rl = mgr()->rule_of(def());
       assert(rl != NULL);
       cond.push_back(rl->build_expr_for(def()->direct_expr_column(),
 					wi->first.host, wi->first.port));
