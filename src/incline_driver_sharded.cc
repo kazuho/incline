@@ -287,6 +287,7 @@ incline_driver_sharded::rule::parse(const string& file, string& err)
   RANGE_ALGO("str-case-sensitive", string);
 #undef RANGE_ALGO
   if (algo == "hash-int") rule = new hash_int_rule(file);
+  if (algo == "replicate") rule = new replicator_rule(file);
   if (rule == NULL) {
     err = "unknown sharding algorithm: " + algo;
     return NULL;
@@ -339,23 +340,6 @@ incline_driver_sharded::replicator_rule::parse(const picojson::value& def)
     dest_cp_.push_back(cp);
   }
   return string();
-}
-
-void
-incline_driver_sharded::run_forwarder(int poll_interval, int log_fd) const
-{
-  incline_fw_sharded::manager shard_mgr(this, poll_interval, log_fd);
-  incline_fw_replicator::manager repl_mgr(this, poll_interval, log_fd);
-  vector<pthread_t> threads;
-  
-  // create forwarders and writers
-  shard_mgr.start(threads);
-  repl_mgr.start(threads);
-  // wait until all forwarder threads exit
-  while (! threads.empty()) {
-    pthread_join(threads.back(), NULL);
-    threads.pop_back();
-  }
 }
 
 incline_driver_sharded::~incline_driver_sharded()
@@ -432,6 +416,43 @@ incline_def*
 incline_driver_sharded::create_def() const
 {
   return new incline_def_sharded();
+}
+
+vector<string>
+incline_driver_sharded::create_table_all(bool if_not_exists, incline_dbms* dbh)
+  const
+{
+  vector<string> r = super::create_table_all(if_not_exists, dbh);
+  r.push_back(string("CREATE TABLE ") + (if_not_exists ? "IF NOT EXISTS " : "")
+	      + "_iq_repl (tbl_name VARCHAR(255) NOT NULL,_iq_id BIGINT NOT NULL,PRIMARY KEY (tbl_name))" + incline_dbms::factory_->create_table_suffix());
+  return r;
+}
+
+vector<string>
+incline_driver_sharded::drop_table_all(bool if_exists)
+  const
+{
+  vector<string> r = super::drop_table_all(if_exists);
+  r.push_back(string("DROP TABLE ") + (if_exists ? "IF EXISTS " : "")
+	      + "_iq_repl");
+  return r;
+}
+
+void
+incline_driver_sharded::run_forwarder(int poll_interval, int log_fd) const
+{
+  incline_fw_sharded::manager shard_mgr(this, poll_interval, log_fd);
+  incline_fw_replicator::manager repl_mgr(this, poll_interval, log_fd);
+  vector<pthread_t> threads;
+  
+  // create forwarders and writers
+  shard_mgr.start(threads);
+  repl_mgr.start(threads);
+  // wait until all forwarder threads exit
+  while (! threads.empty()) {
+    pthread_join(threads.back(), NULL);
+    threads.pop_back();
+  }
 }
 
 bool

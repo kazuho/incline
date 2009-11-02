@@ -12,6 +12,8 @@ using namespace std;
 
 static getoptpp::opt_str opt_mode('m', "mode", false, "mode", "standalone");
 static getoptpp::opt_str opt_source('s', "source", true, "definition file");
+static getoptpp::opt_flag opt_print_only(0, "print-only",
+					 "print the SQLs to be issued instead");
 
 static getoptpp::opt_str opt_forwarder_log_file(0, "forwarder-log-file", false,
 						"", "");
@@ -23,7 +25,11 @@ static void run_all_stmt(incline_dbms* dbh, const vector<string>& stmt)
   for (vector<string>::const_iterator si = stmt.begin();
        si != stmt.end();
        ++si) {
-    dbh->execute(*si);
+    if (*opt_print_only) {
+      cout << *si << endl;
+    } else {
+      dbh->execute(*si);
+    }
   }
 }
 
@@ -65,7 +71,15 @@ main(int argc, char** argv)
   
   // parse command
   getoptpp::opt_version opt_version('v', "version", VERSION);
-  getoptpp::opt_help opt_help('h', "help", argv[0], "load-triggers");
+  getoptpp::opt_help
+    opt_help('h', "help", argv[0],
+	     "command\n\n"
+	     "Commands:\n"
+	     "    create-trigger                installs necessary triggers\n"
+	     "    drop-trigger                  unistalls triggers\n"
+	     "    create-queue                  creates queue tables\n"
+	     "    drop-queue                    drops queue tables\n"
+	     "    forward                       runs the forwarder\n");
   if (! getoptpp::getopt(argc, argv)) {
     exit(1);
   }
@@ -142,12 +156,6 @@ main(int argc, char** argv)
   } else if (command == "drop-trigger") {
     vector<string> stmt(mgr->drop_trigger_all(true));
     run_all_stmt(dbh(), stmt);
-  } else if (command == "print-trigger") {
-    vector<string> stmt(mgr->create_trigger_all(false));
-    picojson::value a(picojson::array_type, false);
-    copy(stmt.begin(), stmt.end(), back_inserter(a.get<picojson::array>()));
-    a.serialize(ostream_iterator<char>(cout));
-    cout << endl;
   } else if (command == "create-queue") {
     vector<string> stmt(aq_driver()->create_table_all(false, dbh()));
     run_all_stmt(dbh(), stmt);

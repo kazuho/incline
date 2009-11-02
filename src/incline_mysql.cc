@@ -43,17 +43,6 @@ incline_mysql::factory::drop_trigger(const string& name, const string& table,
 }
 
 string
-incline_mysql::factory::create_queue_table(const string& table_name,
-					   const string& column_defs,
-					   bool if_not_exists) const
-{
-  return string("CREATE TABLE ") + (if_not_exists ? "IF NOT EXISTS " : "")
-    + table_name + " (_iq_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,"
-    "_iq_action CHAR(1) CHARACTER SET latin1 NOT NULL," + column_defs
-    + ",PRIMARY KEY (_iq_id))";
-}
-
-string
 incline_mysql::factory::delete_using(const string& table_name,
 				     const vector<string>& using_list) const
 {

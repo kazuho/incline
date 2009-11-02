@@ -78,16 +78,6 @@ incline_pgsql::factory::drop_trigger(const string& name, const string& table,
 }
 
 string
-incline_pgsql::factory::create_queue_table(const string& table_name,
-					   const string& column_defs,
-					   bool if_not_exists) const
-{
-  return string("CREATE TABLE ") + (if_not_exists ? "IF NOT EXISTS " : "")
-    + table_name + " (_iq_id SERIAL,_iq_action CHAR(1) NOT NULL," + column_defs
-    + ",PRIMARY KEY (_iq_id))";
-}
-
-string
 incline_pgsql::factory::delete_using(const string& table_name,
 				     const vector<string>& using_list) const
 {

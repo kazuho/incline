@@ -106,10 +106,10 @@ incline_driver_async_qtable::_create_table_of(const incline_def_async_qtable*
     col_defs.push_back(ci->second + ' '
 		       + dbh->get_column_def(def->destination(), ci->second));
   }
-  return
-    incline_dbms::factory_
-    ->create_queue_table(table_name, incline_util::join(',', col_defs),
-			 if_not_exists);
+  return string("CREATE TABLE ") + (if_not_exists ? "IF NOT EXISTS " : "")
+    + table_name + " (_iq_id " + incline_dbms::factory_->serial_column_type()
+    + ",_iq_action CHAR(1) NOT NULL," + incline_util::join(',', col_defs)
+    + ",PRIMARY KEY(_iq_id))" + incline_dbms::factory_->create_table_suffix();
 }
 
 void

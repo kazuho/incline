@@ -66,6 +66,8 @@ public:
   virtual ~incline_driver_sharded();
   std::string init(const std::string& host, unsigned short port);
   virtual incline_def* create_def() const;
+  std::vector<std::string> create_table_all(bool if_not_exists, incline_dbms* dbh) const;
+  std::vector<std::string> drop_table_all(bool if_exists) const;
   virtual void run_forwarder(int poll_interval, int log_fd) const;
   virtual bool should_exit_loop() const;
   const rule* rule_of(const std::string& file) const;
