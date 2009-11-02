@@ -9,8 +9,8 @@ class incline_dbms;
 class incline_driver_async_qtable : public incline_driver_async {
 public:
   virtual incline_def* create_def() const;
-  std::vector<std::string> create_table_all(bool if_not_exists, incline_dbms* dbh) const;
-  std::vector<std::string> drop_table_all(bool if_exists) const;
+  virtual std::vector<std::string> create_table_all(bool if_not_exists, incline_dbms* dbh) const;
+  virtual std::vector<std::string> drop_table_all(bool if_exists) const;
   std::string create_table_of(const incline_def* def, bool if_not_exists, incline_dbms* dbh) const;
   std::string drop_table_of(const incline_def* def, bool if_exists) const;
   virtual void run_forwarder(int poll_interval, int log_fd) const;

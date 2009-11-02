@@ -58,7 +58,7 @@ incline_fw_replicator::run()
       if (dest_dbh == NULL) {
 	dest_dbh = dest_cp_.connect();
 	vector<vector<incline_dbms::value_t> > res;
-	dbh_->query(res,
+	dest_dbh->query(res,
 		    "SELECT last_id FROM _iq_repl WHERE tbl_name='"
 		    + dest_dbh->escape(def()->destination()) + '\'');
 	last_id = res.empty() ? string("0") : *res[0][0];

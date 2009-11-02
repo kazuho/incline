@@ -5,6 +5,7 @@ use lib qw(t);
 
 use DBI;
 use InclineTest;
+use Scope::Guard;
 use Test::More;
 
 # skip tests if dbms does not exist
@@ -15,7 +16,7 @@ init_db(
     postgresql => {},
 );
 
-plan tests => 11;
+plan tests => 27;
 
 my @incline_cmd = (
     qw(src/incline),
@@ -61,24 +62,6 @@ for my $db_node (@db_nodes) {
             ),
             'create source table',
         );
-        ok(
-            system(
-                @incline_cmd,
-                "--host=$db_host",
-                "--port=$db_port",
-                'create-queue',
-            ) == 0,
-            'create queue',
-        );
-        ok(
-            system(
-                @incline_cmd,
-                "--host=$db_host",
-                "--port=$db_port",
-                'create-trigger',
-            ) == 0,
-            'create trigger',
-        );
     } else {
         ok(
             $dbh[-1]->do(
@@ -87,6 +70,89 @@ for my $db_node (@db_nodes) {
             'create dest table',
         );
     }
+    ok(
+        system(
+            @incline_cmd,
+            "--host=$db_host",
+            "--port=$db_port",
+            'create-queue',
+        ) == 0,
+        'create queue',
+    );
+    ok(
+        system(
+            @incline_cmd,
+            "--host=$db_host",
+            "--port=$db_port",
+            'create-trigger',
+        ) == 0,
+        'create trigger',
+    );
 }
+
+sub cmpf {
+    my $slave = shift;
+    my $n = $dbh[0]->selectall_arrayref(
+        'SELECT MAX(_iq_id) FROM _iq_incline_dest',
+    )->[0]->[0];
+    sleep 1 while do {
+        my $r = $dbh[$slave]->selectall_arrayref(
+            q{SELECT last_id FROM _iq_repl WHERE tbl_name='incline_dest'},
+        );
+        $n != (@$r ? $r->[0]->[0] : 0);
+    };
+    return (
+        $dbh[0]->selectall_arrayref('SELECT * FROM incline_src'),
+        $dbh[$slave]->selectall_arrayref('SELECT * FROM incline_dest'),
+    );
+}
+
+sub start_fw {
+    my $fw_pid;
+    unless ($fw_pid = fork()) {
+        my ($db_host, $db_port) = split /:/, $db_nodes[0], 2;
+        exec_cmd(
+            @incline_cmd,
+            "--host=$db_host",
+            "--port=$db_port",
+            'forward',
+        );
+        die "failed to exec forwarder: $?";
+    }
+    Scope::Guard->new(sub { kill 9, $fw_pid if $fw_pid });
+}
+
+# start forwarder
+my $fw = start_fw();
+
+ok(
+    $dbh[0]->do(q{INSERT into incline_src (message) VALUES ('hello')}),
+    'insert',
+);
+is_deeply(cmpf($_), "post insertion check (node $_)")
+    for qw/1 2/;
+ok(
+    $dbh[0]->do(q{UPDATE incline_src SET message='ciao'}),
+    'update',
+);
+is_deeply(cmpf($_), "post update check (node $_)")
+    for qw/1 2/;
+ok(
+    $dbh[0]->do(q{INSERT into incline_src (message) VALUES ('aloha')}),
+    'insert 2',
+);
+is_deeply(cmpf($_), "post insertion check 2 (node $_)")
+    for qw/1 2/;
+ok(
+    $dbh[0]->do(q{DELETE FROM incline_src WHERE message='ciao'}),
+    'delete',
+);
+is_deeply(cmpf($_), "post deletion check (node $_)")
+    for qw/1 2/;
+
+# TODO add partial stop tests
+
+undef $fw;
+@dbh = ();
 
 1;

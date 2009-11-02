@@ -256,6 +256,21 @@ incline_driver_sharded::connect_params::connect()
   return incline_dbms::factory_->create(host, port, username, password);
 }
 
+const incline_driver_sharded::connect_params*
+incline_driver_sharded::connect_params::find(const vector<connect_params>& cp,
+					     const string& host,
+					     unsigned short port)
+{
+  for (vector<connect_params>::const_iterator ci = cp.begin();
+       ci != cp.end();
+       ++ci) {
+    if (ci->host == host && ci->port == port) {
+      return &*ci;
+    }
+  }
+  return NULL;
+}
+
 incline_driver_sharded::rule*
 incline_driver_sharded::rule::parse(const string& file, string& err)
 {
@@ -391,15 +406,12 @@ incline_driver_sharded::init(const string& host, unsigned short port)
 	for (vector<connect_params>::const_iterator pi = partial.begin();
 	     pi != partial.end();
 	     ++pi) {
-	  for (vector<connect_params>::const_iterator ai = all_cp.begin();
-	       ai != all_cp.end();
-	       ++ai) {
-	    if (pi->host == ai->host && pi->port == ai->port) {
-	      stringstream ss;
-	      ss << "collision found for " << pi->host << ':' << pi->port
-		 << " in files:" << ai->file << " and " << pi->file;
-	      return ss.str();
-	    }
+	  if (const connect_params* col = connect_params::find(all_cp, pi->host,
+							       pi->port)) {
+	    stringstream ss;
+	    ss << "collision found for " << pi->host << ':' << pi->port
+	       << " in files:" << col->file << " and " << pi->file;
+	    return ss.str();
 	  }
 	  all_cp.push_back(*pi);
 	}
@@ -422,9 +434,25 @@ vector<string>
 incline_driver_sharded::create_table_all(bool if_not_exists, incline_dbms* dbh)
   const
 {
-  vector<string> r = super::create_table_all(if_not_exists, dbh);
-  r.push_back(string("CREATE TABLE ") + (if_not_exists ? "IF NOT EXISTS " : "")
-	      + "_iq_repl (tbl_name VARCHAR(255) NOT NULL,_iq_id BIGINT NOT NULL,PRIMARY KEY (tbl_name))" + incline_dbms::factory_->create_table_suffix());
+  vector<string> r;
+  bool is_repl_dest = false;
+  for (vector<incline_def*>::const_iterator di = mgr_->defs().begin();
+       di != mgr_->defs().end();
+       ++di) {
+    const incline_def_sharded* def
+      = static_cast<const incline_def_sharded*>(*di);
+    if (is_src_host_of(def)) {
+      r.push_back(create_table_of(def, if_not_exists, dbh));
+    }
+    is_repl_dest = is_repl_dest || is_replicator_dest_host_of(def);
+  }
+  if (is_repl_dest) {
+    r.push_back(string("CREATE TABLE ")
+		+ (if_not_exists ? "IF NOT EXISTS " : "")
+		+ "_iq_repl (tbl_name VARCHAR(255) NOT NULL,"
+		"last_id BIGINT NOT NULL,PRIMARY KEY (tbl_name))"
+		+ incline_dbms::factory_->create_table_suffix());
+  }
   return r;
 }
 
@@ -432,9 +460,22 @@ vector<string>
 incline_driver_sharded::drop_table_all(bool if_exists)
   const
 {
-  vector<string> r = super::drop_table_all(if_exists);
-  r.push_back(string("DROP TABLE ") + (if_exists ? "IF EXISTS " : "")
-	      + "_iq_repl");
+  vector<string> r;
+  bool is_repl_dest = false;
+  for (vector<incline_def*>::const_iterator di = mgr_->defs().begin();
+       di != mgr_->defs().end();
+       ++di) {
+    const incline_def_sharded* def
+      = static_cast<const incline_def_sharded*>(*di);
+    if (is_src_host_of(def)) {
+      r.push_back(drop_table_of(def, if_exists));
+    }
+    is_repl_dest = is_repl_dest || is_replicator_dest_host_of(def);
+  }
+  if (is_repl_dest) {
+    r.push_back(string("DROP TABLE ") + (if_exists ? "IF EXISTS " : "")
+		+ "_iq_repl");
+  }
   return r;
 }
 
@@ -483,6 +524,35 @@ incline_driver_sharded::rule_of(const string& file) const
   return NULL;
 }
 
+bool
+incline_driver_sharded::is_src_host_of(const incline_def_sharded* def) const
+{
+  const rule* rl = rule_of(def->shard_file());
+  assert(rl != NULL);
+  if (const shard_rule* srl = dynamic_cast<const shard_rule*>(rl)) {
+    return 
+      connect_params::find(srl->get_all_connect_params(), cur_host_, cur_port_)
+      != NULL;
+  } else if (const replicator_rule* rrl
+	     = dynamic_cast<const replicator_rule*>(rl)) {
+    return rrl->source().host == cur_host_ && rrl->source().port == cur_port_;
+  }
+  assert(0);
+}
+
+bool
+incline_driver_sharded::is_replicator_dest_host_of(const incline_def_sharded*
+						   def) const
+{
+  const rule* rl = rule_of(def->shard_file());
+  assert(rl != NULL);
+  if (const replicator_rule* rrl = dynamic_cast<const replicator_rule*>(rl)) {
+    return
+      connect_params::find(rrl->destination(), cur_host_, cur_port_) != NULL;
+  }
+  return false;
+}
+
 void
 incline_driver_sharded::_build_insert_from_def(trigger_body& body,
 					       const incline_def* _def,
@@ -493,7 +563,7 @@ incline_driver_sharded::_build_insert_from_def(trigger_body& body,
   const incline_def_sharded* def
     = dynamic_cast<const incline_def_sharded*>(_def);
   assert(def != NULL);
-  if (_is_source_host_of(def)) {
+  if (is_src_host_of(def)) {
     super::_build_insert_from_def(body, def, src_table, action, cond);
   }
 }
@@ -507,7 +577,7 @@ incline_driver_sharded::_build_delete_from_def(trigger_body& body,
   const incline_def_sharded* def
     = dynamic_cast<const incline_def_sharded*>(_def);
   assert(def != NULL);
-  if (_is_source_host_of(def)) {
+  if (is_src_host_of(def)) {
     super::_build_delete_from_def(body, def, src_table, cond);
   }
 }
@@ -522,7 +592,7 @@ incline_driver_sharded::_build_update_merge_from_def(trigger_body& body,
   const incline_def_sharded* def
     = dynamic_cast<const incline_def_sharded*>(_def);
   assert(def != NULL);
-  if (_is_source_host_of(def)) {
+  if (is_src_host_of(def)) {
     super::_build_update_merge_from_def(body, def, src_table, cond);
   }
 }
@@ -539,26 +609,4 @@ incline_driver_sharded::do_build_direct_expr(const incline_def_async* _def,
   const shard_rule* srl = dynamic_cast<const shard_rule*>(rl);
   assert(srl != NULL);
   return srl->build_expr_for(column_expr, cur_host_, cur_port_);
-}
-
-bool
-incline_driver_sharded::_is_source_host_of(const incline_def_sharded* def) const
-{
-  const rule* rl = rule_of(def->shard_file());
-  assert(rl != NULL);
-  if (const shard_rule* srl = dynamic_cast<const shard_rule*>(rl)) {
-    vector<connect_params> cp = srl->get_all_connect_params();
-    for (vector<connect_params>::const_iterator ci = cp.begin();
-	 ci != cp.end();
-	 ++ci) {
-      if (ci->host == cur_host_ && ci->port == cur_port_) {
-	return true;
-      }
-    }
-    return false;
-  } else if (const replicator_rule* rrl
-	     = dynamic_cast<const replicator_rule*>(rl)) {
-    return rrl->source().host == cur_host_ && rrl->source().port == cur_port_;
-  }
-  assert(0);
 }
