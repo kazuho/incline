@@ -102,7 +102,7 @@ incline_pgsql::escape(const string& s)
   return string(buf);
 }
 
-void
+unsigned long long
 incline_pgsql::execute(const string& stmt)
 {
   PGresultWrap ret(PQexec(dbh_, stmt.c_str()));
@@ -118,6 +118,13 @@ incline_pgsql::execute(const string& stmt)
   default:
     THROW_PQ_ERROR(dbh_);
   }
+  unsigned long long nrows = 0;
+  if (const char* s = PQcmdTuples(*ret)) {
+    if (s[0] != '\0') {
+      nrows = strtoll(s, NULL, 10);
+    }
+  }
+  return nrows;
 }
 
 void

@@ -27,7 +27,7 @@ protected:
 public:
   virtual ~incline_mysql();
   virtual std::string escape(const std::string& s);
-  virtual void execute(const std::string& stmt);
+  virtual unsigned long long execute(const std::string& stmt);
   virtual void query(std::vector<std::vector<value_t> >& rows, const std::string& stmt);
   virtual std::string get_column_def(const std::string& table_name, const std::string& column_name);
 private:

@@ -70,7 +70,7 @@ incline_mysql::escape(const string& s)
   }
 }
 
-void
+unsigned long long
 incline_mysql::execute(const string& stmt)
 {
   try {
@@ -85,6 +85,7 @@ incline_mysql::execute(const string& stmt)
       throw error_t(e.what());
     }
   }
+  return tmd::affected_rows(*dbh_);
 }
 
 void

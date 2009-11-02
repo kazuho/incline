@@ -62,7 +62,7 @@ public:
   std::string host() const { return host_; }
   unsigned short port() const { return port_; }
   virtual std::string escape(const std::string& s) = 0;
-  virtual void execute(const std::string& stmt) = 0;
+  virtual unsigned long long execute(const std::string& stmt) = 0;
   void query(std::vector<std::vector<value_t> >& rows, const char* fmt, ...) __attribute__((__format__(__printf__, 3, 4)));
   virtual void query(std::vector<std::vector<value_t> >& rows, const std::string& stmt) = 0;
   virtual std::string get_column_def(const std::string& table_name, const std::string& column_name) = 0;

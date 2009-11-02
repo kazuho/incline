@@ -87,9 +87,15 @@ incline_fw_replicator::run()
       if (! insert_rows.empty()) {
 	this->insert_rows(dest_dbh, insert_rows);
       }
-      string sql("INSERT INTO _iq_repl (tbl_name,last_id) VALUES ('" + def()->destination() + "'," + last_id + ") ON DUPLICATE KEY UPDATE last_id=VALUES(last_id)");
+      string sql("UPDATE _iq_repl SET last_id=" + last_id + " WHERE tbl_name='"
+		 + dest_dbh->escape(def()->destination()) + '\'');
       mgr_->log_sql(dest_dbh, sql);
-      dest_dbh->execute(sql);
+      if (dest_dbh->execute(sql) == 0) {
+	sql = "INSERT INTO _iq_repl (tbl_name,last_id) VALUES ('"
+	  + dest_dbh->escape(def()->destination()) + "'," + last_id + ')';
+	mgr_->log_sql(dest_dbh, sql);
+	dest_dbh->execute(sql);
+      }
       dest_dbh->execute("COMMIT");
     } catch (incline_dbms::error_t& err) {
       cerr << err.what() << endl;
