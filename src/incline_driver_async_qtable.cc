@@ -23,7 +23,7 @@ incline_driver_async_qtable::create_table_all(bool if_not_exists,
 					      incline_dbms* dbh) const
 {
   vector<string> r;
-  for (std::vector<incline_def*>::const_iterator di = mgr_->defs().begin();
+  for (vector<incline_def*>::const_iterator di = mgr_->defs().begin();
        di != mgr_->defs().end();
        ++di) {
     r.push_back(create_table_of(*di, if_not_exists, dbh));
@@ -35,7 +35,7 @@ vector<string>
 incline_driver_async_qtable::drop_table_all(bool if_exists) const
 {
   vector<string> r;
-  for (std::vector<incline_def*>::const_iterator di = mgr_->defs().begin();
+  for (vector<incline_def*>::const_iterator di = mgr_->defs().begin();
        di != mgr_->defs().end();
        ++di) {
     r.push_back(drop_table_of(*di, if_exists));
@@ -95,7 +95,7 @@ incline_driver_async_qtable::run_forwarder(int poll_interval, int log_fd) const
 string
 incline_driver_async_qtable::_create_table_of(const incline_def_async_qtable*
 					      def,
-					      const std::string& table_name,
+					      const string& table_name,
 					      bool if_not_exists,
 					      incline_dbms* dbh) const
 {
