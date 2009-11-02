@@ -103,8 +103,11 @@ incline_driver_async_qtable::_create_table_of(const incline_def_async_qtable*
   for (map<string, string>::const_iterator ci = def->columns().begin();
        ci != def->columns().end();
        ++ci) {
+    string::size_type dot_at = ci->first.find('.');
+    assert(dot_at != string::npos);
     col_defs.push_back(ci->second + ' '
-		       + dbh->get_column_def(def->destination(), ci->second));
+		       + dbh->get_column_def(ci->first.substr(0, dot_at),
+					     ci->first.substr(dot_at + 1)));
   }
   return string("CREATE TABLE ") + (if_not_exists ? "IF NOT EXISTS " : "")
     + table_name + " (_iq_id " + incline_dbms::factory_->serial_column_type()
