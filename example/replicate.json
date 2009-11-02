@@ -1,0 +1,16 @@
+{
+  "algorithm"   : "replicate",
+  "source"      : [{
+    "host" : "127.0.0.1",
+    "port" : 19010
+  }],
+  "destination" : [
+    [{
+      "host" : "127.0.0.1",
+      "port" : 19011
+    }], [{
+      "host" : "127.0.0.1",
+      "port" : 19012
+    }]
+  ]
+}
