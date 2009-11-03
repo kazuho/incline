@@ -59,9 +59,8 @@ incline_pgsql::factory::create_trigger(const string& name, const string& event,
   s += "BEGIN\n" + escape_quote(funcbody) + "  RETURN NEW;\nEND"
     + "' language 'plpgsql'";
   r.push_back(s);
-  r.push_back("CREATE TRIGGER " + name + ' ' + time + ' ' + event
-	      + " ON " + table + " FOR EACH ROW EXECUTE PROCEDURE " + name
-	      + "()");
+  r.push_back("CREATE TRIGGER " + name + ' ' + time + ' ' + event + " ON "
+	      + table + " FOR EACH ROW EXECUTE PROCEDURE " + name + "()");
   return r;
 }
 
@@ -87,7 +86,10 @@ incline_pgsql::factory::delete_using(const string& table_name,
 
 incline_pgsql::~incline_pgsql()
 {
-  PQfinish(dbh_);
+  if (dbh_ != NULL) {
+    PQfinish(dbh_);
+    dbh_ = NULL;
+  }
 }
 
 string
@@ -95,9 +97,9 @@ incline_pgsql::escape(const string& s)
 {
   char* buf = (char*)alloca(s.size() * 2 + 1);
   int err = 0;
-  PQescapeStringConn(dbh_, buf, s.c_str(), s.size(), &err);
+  PQescapeStringConn(_dbh(), buf, s.c_str(), s.size(), &err);
   if (err != 0) {
-    THROW_PQ_ERROR(dbh_);
+    THROW_PQ_ERROR(_dbh());
   }
   return string(buf);
 }
@@ -105,7 +107,7 @@ incline_pgsql::escape(const string& s)
 unsigned long long
 incline_pgsql::execute(const string& stmt)
 {
-  PGresultWrap ret(PQexec(dbh_, stmt.c_str()));
+  PGresultWrap ret(PQexec(_dbh(), stmt.c_str()));
   assert(*ret != NULL);
   switch (PQresultStatus(*ret)) {
   case PGRES_COMMAND_OK:
@@ -116,7 +118,7 @@ incline_pgsql::execute(const string& stmt)
   case PGRES_TUPLES_OK:
     throw error_t("unexpected response from pgsql server");
   default:
-    THROW_PQ_ERROR(dbh_);
+    THROW_PQ_ERROR(_dbh());
   }
   unsigned long long nrows = 0;
   if (const char* s = PQcmdTuples(*ret)) {
@@ -132,7 +134,7 @@ incline_pgsql::query(vector<vector<value_t> >& rows, const string& stmt)
 {
   rows.clear();
   // send query, check response type
-  PGresultWrap ret(PQexec(dbh_, stmt.c_str()));
+  PGresultWrap ret(PQexec(_dbh(), stmt.c_str()));
   assert(*ret != NULL);
   switch (PQresultStatus(*ret)) {
   case PGRES_TUPLES_OK:
@@ -143,7 +145,7 @@ incline_pgsql::query(vector<vector<value_t> >& rows, const string& stmt)
   case PGRES_COPY_IN:
     throw error_t("unexpected response from pgsql server");
   default:
-    THROW_PQ_ERROR(dbh_);
+    THROW_PQ_ERROR(_dbh());
   }
   // read response
   int ntuples = PQntuples(*ret),
@@ -182,14 +184,23 @@ incline_pgsql::get_column_def(const string& table_name,
 
 incline_pgsql::incline_pgsql(const string& host, unsigned short port,
 			     const string& user, const string& password)
-  : super(host, port), dbh_(NULL)
+  : super(host, port), dbh_(NULL), conninfo_()
 {
   stringstream conninfo;
   conninfo << "host=" << host_ << " port=" << port_ << " dbname="
 	   << *opt_database_ << " user=" << user << " password=" << password;
-  dbh_ = PQconnectdb(conninfo.str().c_str());
-  assert(dbh_ != NULL);
-  if (PQstatus(dbh_) != CONNECTION_OK) {
-    THROW_PQ_ERROR(dbh_);
+  conninfo_ = conninfo.str();
+}
+
+PGconn*
+incline_pgsql::_dbh()
+{
+  if (dbh_ == NULL) {
+    dbh_ = PQconnectdb(conninfo_.c_str());
+    assert(dbh_ != NULL);
+    if (PQstatus(dbh_) != CONNECTION_OK) {
+      THROW_PQ_ERROR(dbh_);
+    }
   }
+  return dbh_;
 }

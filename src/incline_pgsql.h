@@ -20,6 +20,7 @@ public:
   };
 protected:
   PGconn* dbh_;
+  std::string conninfo_;
 public:
   virtual ~incline_pgsql();
   virtual std::string escape(const std::string& s);
