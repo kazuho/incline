@@ -16,7 +16,7 @@ init_db(
     postgresql => {},
 );
 
-plan tests => 27;
+plan tests => 27 + ($ENV{TEST_DBMS} ne 'postgresql' && 3);
 
 my @incline_cmd = (
     qw(src/incline),
@@ -126,7 +126,7 @@ sub start_fw {
 my $fw = start_fw();
 
 ok(
-    $dbh[0]->do(q{INSERT into incline_src (message) VALUES ('hello')}),
+    $dbh[0]->do(q{INSERT INTO incline_src (message) VALUES ('hello')}),
     'insert',
 );
 is_deeply(cmpf($_), "post insertion check (node $_)")
@@ -138,7 +138,7 @@ ok(
 is_deeply(cmpf($_), "post update check (node $_)")
     for qw/1 2/;
 ok(
-    $dbh[0]->do(q{INSERT into incline_src (message) VALUES ('aloha')}),
+    $dbh[0]->do(q{INSERT INTO incline_src (message) VALUES ('aloha')}),
     'insert 2',
 );
 is_deeply(cmpf($_), "post insertion check 2 (node $_)")
@@ -150,7 +150,20 @@ ok(
 is_deeply(cmpf($_), "post deletion check (node $_)")
     for qw/1 2/;
 
-# TODO add partial stop tests
+# partially down test (TODO: support postmaster, that does not exit until all connections (including that from forwarder) closes)
+if ($ENV{TEST_DBMS} ne 'postgresql') {
+    undef $dbh[1];
+    $db[1]->stop();
+    ok(
+        $dbh[0]->do(q{INSERT INTO incline_src (message) VALUES ('nihao')}),
+        'partially down: insert',
+    );
+    is_deeply(cmpf(2), 'partially down: insert to nodes alive');
+    $db[1]->start();
+    $dbh[1] = DBI->connect($db[1]->dsn)
+        or die $DBI::errstr;
+    is_deeply(cmpf(1), 'partially down: reconnect and sync on recovery');
+}
 
 undef $fw;
 @dbh = ();
