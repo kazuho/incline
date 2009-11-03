@@ -6,7 +6,10 @@ extern "C" {
 #include <iterator>
 #include "getoptpp.h"
 #include "incline_config.h"
-#include "incline.h"
+#include "incline_def_sharded.h"
+#include "incline_dbms.h"
+#include "incline_driver_sharded.h"
+#include "incline_mgr.h"
 
 using namespace std;
 
@@ -18,7 +21,7 @@ static getoptpp::opt_flag opt_print_only(0, "print-only",
 static getoptpp::opt_str opt_forwarder_log_file(0, "forwarder-log-file", false,
 						"", "");
 
-static incline_mgr* mgr = NULL;
+static auto_ptr<incline_mgr> mgr;
 
 static void run_all_stmt(incline_dbms* dbh, const vector<string>& stmt)
 {
@@ -57,11 +60,11 @@ inline incline_driver_sharded* shard_driver()
 
 static incline_dbms* dbh()
 {
-  static incline_dbms* dbh = NULL;
-  if (dbh == NULL) {
-    dbh = incline_dbms::factory_->create();
+  static auto_ptr<incline_dbms> h;
+  if (h.get() == NULL) {
+    h.reset(incline_dbms::factory_->create());
   }
-  return dbh;
+  return h.get();
 }
 
 int
@@ -104,7 +107,7 @@ main(int argc, char** argv)
       cerr << "unknown mode:" << *opt_mode << endl;
       exit(1);
     }
-    mgr = new incline_mgr(driver);
+    mgr.reset(new incline_mgr(driver));
   }
   
   { // parse source

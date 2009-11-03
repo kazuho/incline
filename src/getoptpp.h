@@ -211,6 +211,7 @@ namespace getoptpp {
 	success = false;
       }
     }
+    delete [] opts;
     return success;
   }
 }

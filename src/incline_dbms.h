@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <memory>
 #include "getoptpp.h"
 
 class incline_dbms {
@@ -78,7 +79,7 @@ public:
   static getoptpp::opt_int opt_port_;
   static getoptpp::opt_str opt_user_;
   static getoptpp::opt_str opt_password_;
-  static factory* factory_;
+  static std::auto_ptr<factory> factory_;
   static bool setup_factory();
 };
 

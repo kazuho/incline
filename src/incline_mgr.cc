@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <memory>
 #include <set>
 #include "incline_dbms.h"
 #include "incline_driver.h"

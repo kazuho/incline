@@ -1,5 +1,5 @@
 bin_PROGRAMS	= incline
-incline_SOURCES	= getoptpp.h incline_dbms.cc incline_dbms.h incline_def.cc incline_def.h incline_driver.cc incline_driver.h incline_mgr.cc incline_mgr.h incline_util.cc incline_util.h incline.cc incline.h interthr_call.h picojson.h start_thread.h tmd.h
+incline_SOURCES	= getoptpp.h incline_dbms.cc incline_dbms.h incline_def.cc incline_def.h incline_driver.cc incline_driver.h incline_mgr.cc incline_mgr.h incline_util.cc incline_util.h incline.cc interthr_call.h picojson.h start_thread.h tmd.h
 incline_SOURCES += incline_driver_standalone.cc incline_driver_standalone.h
 incline_SOURCES += incline_def_async.cc incline_def_async.h incline_driver_async.cc incline_driver_async.h
 incline_SOURCES += incline_def_async_qtable.cc incline_def_async_qtable.h incline_driver_async_qtable.cc incline_driver_async_qtable.h

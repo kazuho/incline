@@ -24,7 +24,7 @@ getoptpp::opt_str incline_dbms::opt_user_('u', "user", false, "database user",
 					   "root");
 getoptpp::opt_str incline_dbms::opt_password_('p', "password", false,
 					       "database password", "");
-incline_dbms::factory* incline_dbms::factory_ = NULL;
+auto_ptr<incline_dbms::factory> incline_dbms::factory_;
 
 pair<string, unsigned short>
 incline_dbms::factory::get_hostport() const
@@ -52,13 +52,13 @@ incline_dbms::setup_factory()
 {
 #ifdef WITH_MYSQL
   if (*opt_rdbms_ == "mysql" || *opt_rdbms_ == "mysqld") {
-    factory_ = new incline_mysql::factory();
+    factory_.reset(new incline_mysql::factory());
     return true;
   }
 #endif
 #ifdef WITH_PGSQL
   if (*opt_rdbms_ == "pgsql" || *opt_rdbms_ == "postgresql") {
-    factory_ = new incline_pgsql::factory();
+    factory_.reset(new incline_pgsql::factory());
     return true;
   }
 #endif
