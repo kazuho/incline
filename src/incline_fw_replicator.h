@@ -24,7 +24,8 @@ public:
   const manager* mgr() const { return static_cast<const manager*>(super::mgr()); }
   manager* mgr() { return static_cast<manager*>(super::mgr()); }
   const incline_def_sharded* def() const { return static_cast<const incline_def_sharded*>(super::def()); }
-  virtual void* run();
+protected:
+  virtual void do_run();
 };
 
 #endif

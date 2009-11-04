@@ -62,6 +62,19 @@ incline_fw::~incline_fw()
   delete dbh_;
 }
 
+void*
+incline_fw::run()
+{
+  try {
+    do_run();
+  } catch (domain_error& e) {
+    delete this;
+    throw;
+  }
+  delete this;
+  return NULL;
+}
+
 // TODO should use vector<shared_ptr<vector<string> > >
 void
 incline_fw::fetch_rows(const string& cond, vector<string>& iq_ids, vector<vector<string> >& delete_pks, vector<vector<string> >& insert_rows)

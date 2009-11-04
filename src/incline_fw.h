@@ -38,8 +38,9 @@ public:
   const manager* mgr() const { return mgr_; }
   manager* mgr() { return mgr_; }
   const incline_def_async_qtable* def() const { return def_; }
-  virtual void* run() = 0;
+  virtual void* run();
 protected:
+  virtual void do_run() = 0;
   void fetch_rows(const std::string& cond, std::vector<std::string>& iq_ids, std::vector<std::vector<std::string> >& delete_pks, std::vector<std::vector<std::string> >& insert_rows);
   // should perform DELETE, then (INSERT|REPLACE)
   void insert_rows(incline_dbms* dbh, const std::vector<std::vector<std::string> >& rows) const;

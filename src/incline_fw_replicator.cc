@@ -42,8 +42,8 @@ incline_fw_replicator::manager::start(vector<pthread_t>& threads)
   }
 }
 
-void*
-incline_fw_replicator::run()
+void
+incline_fw_replicator::do_run()
 {
   incline_dbms* dest_dbh = NULL;
   string last_id;
@@ -114,5 +114,4 @@ incline_fw_replicator::run()
   }
   
   delete dest_dbh;
-  return NULL;
 }

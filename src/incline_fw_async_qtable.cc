@@ -16,8 +16,8 @@ incline_fw_async_qtable::incline_fw_async_qtable(manager* mgr,
 {
 }
 
-void*
-incline_fw_async_qtable::run()
+void
+incline_fw_async_qtable::do_run()
 {
   string extra_cond, last_id;
   
@@ -58,8 +58,6 @@ incline_fw_async_qtable::run()
       // just retry
     }
   }
-  
-  return NULL;
 }
 
 bool

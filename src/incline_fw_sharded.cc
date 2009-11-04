@@ -145,7 +145,6 @@ incline_fw_sharded::manager::start(vector<pthread_t>& threads)
 	}
       }
       {
-	// TODO call destructor on termination
 	incline_dbms* dbh = incline_dbms::factory_->create();
 	assert(dbh != NULL);
 	threads.push_back(start_thread(new incline_fw_sharded(this, def, dbh)));
