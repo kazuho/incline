@@ -48,6 +48,12 @@ incline_fw_replicator::do_run()
   incline_dbms* dest_dbh = NULL;
   string last_id;
   
+  { // establish (delayed) connection, forwarder should exit immediately if
+    // source is down
+    vector<vector<incline_dbms::value_t> > res;
+    dbh_->query(res, "SELECT 1");
+  }
+  
   while (! mgr()->driver()->should_exit_loop()) {
     
     vector<string> iq_ids;
