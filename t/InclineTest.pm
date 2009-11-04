@@ -70,9 +70,13 @@ sub push_bench {
 
 sub exec_cmd {
     my @args = @_;
-    if ($ENV{USE_GDB}) {
-        print STDERR "*** running: ", join(' ', @args), "\n";
-        exec('gdb', shift @args);
+    if ($ENV{CMD_PREFIX}) {
+        if ($ENV{CMD_PREFIX} eq 'gdb') {
+            print STDERR "*** running: ", join(' ', @args), "\n";
+            exec('gdb', shift @args);
+        } else {
+            exec((split /\s+/, $ENV{CMD_PREFIX}), @args);
+        }
     } else {
         exec @args;
     }
