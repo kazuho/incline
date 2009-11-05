@@ -4,7 +4,7 @@ extern "C" {
 }
 #include "incline_dbms.h"
 #include "incline_def_async_qtable.h"
-#include "incline_driver.h"
+#include "incline_driver_async_qtable.h"
 #include "incline_fw.h"
 #include "incline_util.h"
 
@@ -25,6 +25,15 @@ incline_fw::manager::log_sql(const incline_dbms* dbms, const string& sql)
     vec[2].iov_len = 2;
     writev(log_fd_, vec, sizeof(vec) / sizeof(vec[0]));
   }
+}
+
+bool
+incline_fw::manager::should_exit_loop() const
+{
+  if (! should_exit_loop_ && driver_->should_exit_loop()) {
+    const_cast<incline_fw::manager*>(this)->should_exit_loop_ = true;
+  }
+  return should_exit_loop_;
 }
 
 incline_fw::incline_fw(manager* mgr, const incline_def_async_qtable* def,
@@ -60,6 +69,7 @@ incline_fw::incline_fw(manager* mgr, const incline_def_async_qtable* def,
 incline_fw::~incline_fw()
 {
   delete dbh_;
+  dbh_ = NULL;
 }
 
 void*
@@ -68,9 +78,9 @@ incline_fw::run()
   try {
     do_run();
   } catch (domain_error& e) {
-    delete this;
-    throw;
+    cerr << e.what() << endl;
   }
+  mgr_->should_exit_loop(true);
   delete this;
   return NULL;
 }

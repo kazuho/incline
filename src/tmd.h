@@ -57,7 +57,9 @@ namespace tmd {
   public:
     error_t(const std::string& s, unsigned int mysql_errno = 0)
       : std::domain_error(s), mysql_errno_(mysql_errno) {
+#ifdef TMD_PRINT_ERROR
       fprintf(stderr, "%d:%s\n", mysql_errno, s.c_str());
+#endif
     }
     unsigned int mysql_errno() const { return mysql_errno_; }
   };

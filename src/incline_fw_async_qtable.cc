@@ -21,7 +21,7 @@ incline_fw_async_qtable::do_run()
 {
   string extra_cond, last_id;
   
-  while (! mgr_->driver()->should_exit_loop()) {
+  while (! mgr_->should_exit_loop()) {
     try {
       vector<string> iq_ids;
       vector<vector<string> > delete_pks, insert_rows;
