@@ -119,7 +119,7 @@ sub start_fw {
         );
         die "failed to exec forwarder: $?";
     }
-    Scope::Guard->new(sub { kill 9, $fw_pid if $fw_pid });
+    Scope::Guard->new(sub { kill 'TERM', $fw_pid if $fw_pid });
 }
 
 # start forwarder

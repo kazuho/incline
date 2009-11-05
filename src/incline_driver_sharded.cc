@@ -480,7 +480,7 @@ incline_driver_sharded::drop_table_all(bool if_exists)
 }
 
 void
-incline_driver_sharded::run_forwarder(int poll_interval, int log_fd) const
+incline_driver_sharded::run_forwarder(int poll_interval, int log_fd)
 {
   incline_fw_sharded::manager shard_mgr(this, poll_interval, log_fd);
   incline_fw_replicator::manager repl_mgr(this, poll_interval, log_fd);
@@ -499,14 +499,18 @@ incline_driver_sharded::run_forwarder(int poll_interval, int log_fd) const
 bool
 incline_driver_sharded::should_exit_loop() const
 {
-  for (vector<const rule*>::const_iterator ri = rules_.begin();
-       ri != rules_.end();
-       ++ri) {
-    if ((*ri)->should_exit_loop()) {
-      return true;
+  if (! super::should_exit_loop()) {
+    for (vector<const rule*>::const_iterator ri = rules_.begin();
+	 ri != rules_.end();
+	 ++ri) {
+      if ((*ri)->should_exit_loop()) {
+	const_cast<incline_driver_sharded*>(this)
+	  ->super::should_exit_loop(true);
+	break;
+      }
     }
   }
-  return false;
+  return super::should_exit_loop();
 }
 
 const incline_driver_sharded::rule*

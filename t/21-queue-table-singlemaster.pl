@@ -59,7 +59,7 @@ ok(system(@incline_cmd, 'create-trigger') == 0, 'create queue');
     my ($fw_script, $fw_pid);
     my $_sg = Scope::Guard->new(
         sub {
-            kill 9, $fw_pid
+            kill 'TERM', $fw_pid
                 if $fw_pid;
         },
     );

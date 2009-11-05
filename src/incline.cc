@@ -1,5 +1,6 @@
 extern "C" {
 #include <fcntl.h>
+#include <signal.h>
 }
 #include <fstream>
 #include <iostream>
@@ -65,6 +66,12 @@ static incline_dbms* dbh()
     h.reset(incline_dbms::factory_->create());
   }
   return h.get();
+}
+
+static void shutdown_forwarder(int signum)
+{
+  cerr << "recevied signal:" << signum << ", shutting down..." << endl;
+  aq_driver()->should_exit_loop(true);
 }
 
 int
@@ -178,6 +185,8 @@ main(int argc, char** argv)
 	exit(3);
       }
     }
+    signal(SIGHUP, shutdown_forwarder);
+    signal(SIGTERM, shutdown_forwarder);
     aq_driver()->run_forwarder(1, log_fd);
   } else {
     fprintf(stderr, "unknown command: %s\n", command.c_str());

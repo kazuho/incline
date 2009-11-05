@@ -27,15 +27,6 @@ incline_fw::manager::log_sql(const incline_dbms* dbms, const string& sql)
   }
 }
 
-bool
-incline_fw::manager::should_exit_loop() const
-{
-  if (! should_exit_loop_ && driver_->should_exit_loop()) {
-    const_cast<incline_fw::manager*>(this)->should_exit_loop_ = true;
-  }
-  return should_exit_loop_;
-}
-
 incline_fw::incline_fw(manager* mgr, const incline_def_async_qtable* def,
 		       incline_dbms* dbh)
   : mgr_(mgr), def_(def), dbh_(dbh),
@@ -80,7 +71,7 @@ incline_fw::run()
   } catch (domain_error& e) {
     cerr << e.what() << endl;
   }
-  mgr_->should_exit_loop(true);
+  mgr_->driver()->should_exit_loop(true);
   delete this;
   return NULL;
 }

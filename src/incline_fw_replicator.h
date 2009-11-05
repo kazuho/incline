@@ -12,8 +12,9 @@ public:
   public:
     typedef super::manager super;
   public:
-    manager(const incline_driver_sharded* driver, int poll_interval, int log_fd) : super(driver, poll_interval, log_fd) {}
+    manager(incline_driver_sharded* driver, int poll_interval, int log_fd) : super(driver, poll_interval, log_fd) {}
     const incline_driver_sharded* driver() const { return static_cast<const incline_driver_sharded*>(super::driver()); }
+    incline_driver_sharded* driver() { return static_cast<incline_driver_sharded*>(super::driver()); }
     void start(std::vector<pthread_t>& threads);
   };
   

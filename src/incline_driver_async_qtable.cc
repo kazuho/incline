@@ -66,7 +66,7 @@ incline_driver_async_qtable::drop_table_of(const incline_def* _def,
 }
 
 void
-incline_driver_async_qtable::run_forwarder(int poll_interval, int log_fd) const
+incline_driver_async_qtable::run_forwarder(int poll_interval, int log_fd)
 {
   incline_fw_async_qtable::manager manager(this, poll_interval, log_fd);
   vector<pthread_t> threads;

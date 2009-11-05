@@ -48,7 +48,7 @@ incline_fw_replicator::do_run()
   incline_dbms* dest_dbh = NULL;
   string last_id;
   
-  while (! mgr()->should_exit_loop()) {
+  while (! mgr()->driver()->should_exit_loop()) {
     
     vector<string> iq_ids;
     vector<vector<string> > delete_pks, insert_rows;

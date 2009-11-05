@@ -39,9 +39,10 @@ public:
   protected:
     std::vector<std::pair<incline_driver_sharded::connect_params, writer*> > writers_;
   public:
-    manager(const incline_driver_sharded* driver, int poll_interval, int log_fd) : super(driver, poll_interval, log_fd), writers_() {}
+    manager(incline_driver_sharded* driver, int poll_interval, int log_fd) : super(driver, poll_interval, log_fd), writers_() {}
     virtual ~manager();
     const incline_driver_sharded* driver() const { return static_cast<const incline_driver_sharded*>(super::driver()); }
+    incline_driver_sharded* driver() { return static_cast<incline_driver_sharded*>(super::driver()); }
     const incline_driver_sharded::shard_rule* rule_of(const incline_def_sharded* def) const;
     const std::vector<std::pair<incline_driver_sharded::connect_params, writer*> >& writers() const { return writers_; }
     void start(std::vector<pthread_t>& threads);

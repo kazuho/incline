@@ -157,7 +157,7 @@ is_deeply(
     my $fw_pid;
     my $_sg = Scope::Guard->new(
         sub {
-            kill 9, $fw_pid;
+            kill 'TERM', $fw_pid;
         },
     );
     unless ($fw_pid = fork()) {

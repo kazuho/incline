@@ -13,18 +13,16 @@ public:
   
   class manager {
   protected:
-    const incline_driver_async_qtable* driver_;
+    incline_driver_async_qtable* driver_;
     int poll_interval_;
     int log_fd_;
-    bool should_exit_loop_;
   public:
-    manager(const incline_driver_async_qtable* driver, int poll_interval, int log_fd) : driver_(driver), poll_interval_(poll_interval), log_fd_(log_fd), should_exit_loop_(false) {}
+    manager(incline_driver_async_qtable* driver, int poll_interval, int log_fd) : driver_(driver), poll_interval_(poll_interval), log_fd_(log_fd) {}
     virtual ~manager() {}
     const incline_driver_async_qtable* driver() const { return driver_; }
+    incline_driver_async_qtable* driver() { return driver_; }
     int poll_interval() const { return poll_interval_; }
     void log_sql(const incline_dbms* dbh, const std::string& sql);
-    bool should_exit_loop() const;
-    void should_exit_loop(bool f) { should_exit_loop_ = f; }
   };
   
 protected:
