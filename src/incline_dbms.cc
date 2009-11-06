@@ -10,6 +10,10 @@
 # include "incline_pgsql.h"
 #endif
 
+#ifdef _MSC_VER
+#  pragma warning(disable : 4996) /* no warnings for vsprintf */
+#endif
+
 using namespace std;
 
 getoptpp::opt_str incline_dbms::opt_rdbms_('r', "rdbms", true, "rdbms name",

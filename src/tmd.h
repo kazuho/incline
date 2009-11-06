@@ -29,6 +29,9 @@
 #ifndef tmd_H
 #define tmd_H
 
+#ifdef WIN32
+#include <windows.h>
+#endif
 extern "C" {
 #include <assert.h>
 #include <stdarg.h>
@@ -39,9 +42,18 @@ extern "C" {
 #include <string>
 #include <vector>
 
+#ifdef _MSC_VER
+#  pragma warning(push)
+#  pragma warning(disable : 4996) // no warnings for sscanf
+#endif
+
 namespace tmd {
   
-  std::string ssprintf(const char* fmt, ...) __attribute__((__format__(__printf__, 1, 2)));
+  std::string ssprintf(const char* fmt, ...)
+#ifdef __GNUC__
+    __attribute__((__format__(__printf__, 1, 2)))
+#endif
+    ;
   inline std::string ssprintf(const char* fmt, ...)
   {
     char buf[4096];
@@ -151,7 +163,7 @@ namespace tmd {
   inline std::string escape(MYSQL* mysql, const std::string& s)
   {
     char* buf = new char[s.size() * 2 + 1];
-    mysql_real_escape_string(mysql, buf, s.c_str(), s.size());
+    mysql_real_escape_string(mysql, buf, s.c_str(), static_cast<unsigned long>(s.size()));
     std::string r(buf);
     delete [] buf;
     return r;
@@ -180,7 +192,10 @@ namespace tmd {
   }
   
   void execute(MYSQL* mysql, const char* fmt, ...)
-    __attribute__((__format__(__printf__, 2, 3)));
+#ifdef __GNUC__
+    __attribute__((__format__(__printf__, 2, 3)))
+#endif
+    ;
   inline void execute(MYSQL* mysql, const char* fmt, ...)
   {
     va_list args;
@@ -209,7 +224,9 @@ namespace tmd {
       num_fields_ = mysql_num_fields(res_);
     }
     query_t(MYSQL* mysql, const char* fmt, ...)
+#ifdef __GNUC__
       __attribute__((__format__(__printf__, 3, 4)))
+#endif
       : row_(NULL), lengths_(NULL) {
       va_list args;
       va_start(args, fmt);
@@ -279,5 +296,9 @@ namespace tmd {
   };
 
 }
+
+#ifdef _MSC_VER
+#  pragma warning(pop)
+#endif
 
 #endif

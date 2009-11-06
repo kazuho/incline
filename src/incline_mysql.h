@@ -4,7 +4,7 @@
 #include "incline_dbms.h"
 
 namespace tmd {
-  struct conn_t;
+  class conn_t;
 }
 
 class incline_mysql : public incline_dbms {

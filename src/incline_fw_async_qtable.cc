@@ -1,3 +1,6 @@
+#ifdef WIN32
+#include <windows.h>
+#endif
 #include "incline_dbms.h"
 #include "incline_def_async_qtable.h"
 #include "incline_driver_async_qtable.h"
@@ -41,7 +44,11 @@ incline_fw_async_qtable::do_run()
       }
       // sleep and retry if no data
       if (iq_ids.empty()) {
-	sleep(mgr()->poll_interval());
+#ifdef WIN32
+        Sleep(mgr()->poll_interval() * 1000);
+#else
+        sleep(mgr()->poll_interval());
+#endif
 	continue;
       }
       if (! extra_cond.empty()) {
@@ -49,7 +56,7 @@ incline_fw_async_qtable::do_run()
       }
       // update and remove from queue if successful
       if (do_update_rows(delete_pks, insert_rows)) {
-	dbh_->execute(clear_queue_query_base_ + '('
+		dbh_->execute(clear_queue_query_base_ + '('
 		      + incline_util::join(',', iq_ids) + ')');
       }
     } catch (incline_dbms::deadlock_error_t&) {

@@ -4,8 +4,6 @@
 
 #ifdef _MSC_VER
 #  define SNPRINTF _snprintf_s
-#  pragma warning(push)
-#  pragma warning(disable : 4244) /* conversion from int to char */
 #else
 #  define SNPRINTF snprintf
 #endif

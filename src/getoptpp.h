@@ -136,10 +136,16 @@ namespace getoptpp {
       : opt_value_base<int>(shortname, longname, required, desc, defval) {}
     virtual void handle() {
       opt_value_base<int>::handle();
-      if (sscanf(optarg, "%d", &value_) != 1) {
-	std::cerr << "--" << get_option().name << " only accepts numbers"
-		  << std::endl;
-	exit(1);
+      if (
+#ifdef _MSC_VER
+          sscanf_s(optarg, "%d", &value_, sizeof(value_))
+#else
+          sscanf(optarg, "%d", &value_)
+#endif
+          != 1) {
+        std::cerr << "--" << get_option().name << " only accepts numbers"
+          << std::endl;
+        exit(1);
       }
     }
   };
