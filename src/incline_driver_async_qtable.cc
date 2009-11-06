@@ -1,7 +1,3 @@
-extern "C" {
-#include <sys/uio.h>
-#include <unistd.h>
-}
 #include "incline_dbms.h"
 #include "incline_def_async_qtable.h"
 #include "incline_driver_async_qtable.h"
