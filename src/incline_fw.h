@@ -1,6 +1,7 @@
 #ifndef incline_fw_h
 #define incline_fw_h
 
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -15,9 +16,9 @@ public:
   protected:
     incline_driver_async_qtable* driver_;
     int poll_interval_;
-    int log_fd_;
+    FILE* log_fh_;
   public:
-    manager(incline_driver_async_qtable* driver, int poll_interval, int log_fd) : driver_(driver), poll_interval_(poll_interval), log_fd_(log_fd) {}
+    manager(incline_driver_async_qtable* driver, int poll_interval, FILE* log_fh) : driver_(driver), poll_interval_(poll_interval), log_fh_(log_fh) {}
     virtual ~manager() {}
     const incline_driver_async_qtable* driver() const { return driver_; }
     incline_driver_async_qtable* driver() { return driver_; }

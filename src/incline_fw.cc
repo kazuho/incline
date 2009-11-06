@@ -1,7 +1,3 @@
-extern "C" {
-#include <sys/uio.h>
-#include <unistd.h>
-}
 #include "incline_dbms.h"
 #include "incline_def_async_qtable.h"
 #include "incline_driver_async_qtable.h"
@@ -13,17 +9,9 @@ using namespace std;
 void
 incline_fw::manager::log_sql(const incline_dbms* dbms, const string& sql)
 {
-  if (log_fd_ != -1) {
-    struct iovec vec[3];
-    char buf[1024];
-    snprintf(buf, sizeof(buf), "%s:%hu:", dbms->host().c_str(), dbms->port());
-    vec[0].iov_base = buf;
-    vec[0].iov_len = strlen(buf);
-    vec[1].iov_base = const_cast<char*>(sql.c_str());
-    vec[1].iov_len = sql.size();
-    vec[2].iov_base = const_cast<char*>(";\n");
-    vec[2].iov_len = 2;
-    writev(log_fd_, vec, sizeof(vec) / sizeof(vec[0]));
+  if (log_fh_ != NULL) {
+    fprintf(log_fh_, "%s:%hu:%s;\n", dbms->host().c_str(), dbms->port(),
+	    sql.c_str());
   }
 }
 

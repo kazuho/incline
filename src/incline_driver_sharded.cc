@@ -480,10 +480,10 @@ incline_driver_sharded::drop_table_all(bool if_exists)
 }
 
 void
-incline_driver_sharded::run_forwarder(int poll_interval, int log_fd)
+incline_driver_sharded::run_forwarder(int poll_interval, FILE* log_fh)
 {
-  incline_fw_sharded::manager shard_mgr(this, poll_interval, log_fd);
-  incline_fw_replicator::manager repl_mgr(this, poll_interval, log_fd);
+  incline_fw_sharded::manager shard_mgr(this, poll_interval, log_fh);
+  incline_fw_replicator::manager repl_mgr(this, poll_interval, log_fh);
   vector<pthread_t> threads;
   
   // create forwarders and writers

@@ -17,7 +17,7 @@ public:
   virtual std::vector<std::string> drop_table_all(bool if_exists) const;
   std::string create_table_of(const incline_def* def, bool if_not_exists, incline_dbms* dbh) const;
   std::string drop_table_of(const incline_def* def, bool if_exists) const;
-  virtual void run_forwarder(int poll_interval, int log_fd);
+  virtual void run_forwarder(int poll_interval, FILE* log_fh);
   virtual bool should_exit_loop() const { return should_exit_loop_; }
   virtual void should_exit_loop(bool f) { should_exit_loop_ = f; }
 protected:

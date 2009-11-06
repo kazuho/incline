@@ -70,7 +70,7 @@ public:
   virtual incline_def* create_def() const;
   virtual std::vector<std::string> create_table_all(bool if_not_exists, incline_dbms* dbh) const;
   virtual std::vector<std::string> drop_table_all(bool if_exists) const;
-  virtual void run_forwarder(int poll_interval, int log_fd);
+  virtual void run_forwarder(int poll_interval, FILE* log_fh);
   virtual bool should_exit_loop() const;
   const rule* rule_of(const std::string& file) const;
   std::pair<std::string, unsigned short> get_hostport() const {

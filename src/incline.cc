@@ -1,7 +1,9 @@
 extern "C" {
+#include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 }
+#include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -173,21 +175,20 @@ main(int argc, char** argv)
     vector<string> stmt(aq_driver()->drop_table_all(true));
     run_all_stmt(dbh(), stmt);
   } else if (command == "forward") {
-    int log_fd = -1;
+    FILE* log_fh = NULL;
     if (*opt_forwarder_log_file == "-") {
-      log_fd = 1;
+      log_fh = stdout;
     } else if (! opt_forwarder_log_file->empty()) {
-      log_fd = open(opt_forwarder_log_file->c_str(),
-		    O_WRONLY | O_APPEND | O_CREAT, 0666);
-      if (log_fd == -1) {
-	fprintf(stderr, "failed to open log file:%s\n",
-		opt_forwarder_log_file->c_str());
+      if ((log_fh = fopen(opt_forwarder_log_file->c_str(), "w+")) == NULL) {
+	fprintf(stderr, "failed to open log file:%s:%s\n",
+		opt_forwarder_log_file->c_str(), strerror(errno));
 	exit(3);
       }
     }
     signal(SIGHUP, shutdown_forwarder);
     signal(SIGTERM, shutdown_forwarder);
-    aq_driver()->run_forwarder(1, log_fd);
+    aq_driver()->run_forwarder(1, log_fh);
+    // TODO close log_fh
   } else {
     fprintf(stderr, "unknown command: %s\n", command.c_str());
     exit(1);
