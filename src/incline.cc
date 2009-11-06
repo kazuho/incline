@@ -13,6 +13,9 @@ extern "C" {
 #include "incline_dbms.h"
 #include "incline_driver_sharded.h"
 #include "incline_mgr.h"
+#ifdef WIN32
+#  include "incline_win32.h"
+#endif
 
 using namespace std;
 
@@ -185,7 +188,10 @@ main(int argc, char** argv)
 	exit(3);
       }
     }
+#ifdef WIN32
+#else
     signal(SIGHUP, shutdown_forwarder);
+#endif
     signal(SIGTERM, shutdown_forwarder);
     aq_driver()->run_forwarder(1, log_fh);
     // TODO close log_fh

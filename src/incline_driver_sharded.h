@@ -26,7 +26,7 @@ public:
   class rule {
   protected:
     std::string file_;
-    time_t file_mtime_;
+    unsigned long long file_mtime_;
   public:
     rule(const std::string& file) : file_(file), file_mtime_(_get_file_mtime()) {}
     virtual ~rule() {}
@@ -34,7 +34,7 @@ public:
     bool should_exit_loop() const;
   protected:
     virtual std::string parse(const picojson::value& def) = 0;
-    time_t _get_file_mtime() const;
+    unsigned long long _get_file_mtime() const;
   public:
     static rule* parse(const std::string& file, std::string& err);
   };

@@ -1,11 +1,8 @@
 #include <cassert>
 #include <cstdarg>
 #include "incline_util.h"
-
-#ifdef _MSC_VER
-#  define SNPRINTF _snprintf_s
-#else
-#  define SNPRINTF snprintf
+#ifdef WIN32
+#  include "incline_win32.h"
 #endif
 
 using namespace std;
@@ -68,7 +65,7 @@ incline_util::filter(const char* fmt, int idx, size_t n, ...)
 	r += repl[(size_t)(*fi - '1')];
       } else if (*fi == 'I') {
 	char buf[16];
-	SNPRINTF(buf, sizeof(buf), "%d", idx);
+	snprintf(buf, sizeof(buf), "%d", idx);
 	r += buf;
       } else {
 	r.push_back(*fi);

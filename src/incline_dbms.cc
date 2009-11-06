@@ -9,9 +9,8 @@
 #ifdef WITH_PGSQL
 # include "incline_pgsql.h"
 #endif
-
-#ifdef _MSC_VER
-#  pragma warning(disable : 4996) /* no warnings for vsprintf */
+#ifdef WIN32
+#  include "incline_win32.h"
 #endif
 
 using namespace std;

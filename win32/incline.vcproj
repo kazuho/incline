@@ -191,7 +191,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="src;C:\Program Files\MySQL\MySQL Server 5.1\include"
+				AdditionalIncludeDirectories="&quot;C:\Program Files\MySQL\MySQL Server 5.1\include&quot;;&quot;pthreads-win32\include&quot;;src"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;WITH_MYSQL"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -212,6 +212,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="&quot;C:\Program Files\MySQL\MySQL Server 5.1\lib\debug\mysqlclient.lib&quot; pthreads-win32\lib\pthreadVC2.lib"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -339,6 +340,10 @@
 				RelativePath="..\src\incline_util.cc"
 				>
 			</File>
+			<File
+				RelativePath=".\src\incline_win32.cc"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="ヘッダー ファイル"
@@ -435,6 +440,10 @@
 			</File>
 			<File
 				RelativePath="..\src\incline_util.h"
+				>
+			</File>
+			<File
+				RelativePath=".\src\incline_win32.h"
 				>
 			</File>
 			<File

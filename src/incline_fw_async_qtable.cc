@@ -1,11 +1,11 @@
-#ifdef WIN32
-#include <windows.h>
-#endif
 #include "incline_dbms.h"
 #include "incline_def_async_qtable.h"
 #include "incline_driver_async_qtable.h"
 #include "incline_fw_async_qtable.h"
 #include "incline_util.h"
+#ifdef WIN32
+#  include "incline_win32.h"
+#endif
 
 using namespace std;
 
@@ -44,11 +44,7 @@ incline_fw_async_qtable::do_run()
       }
       // sleep and retry if no data
       if (iq_ids.empty()) {
-#ifdef WIN32
-        Sleep(mgr()->poll_interval() * 1000);
-#else
         sleep(mgr()->poll_interval());
-#endif
 	continue;
       }
       if (! extra_cond.empty()) {

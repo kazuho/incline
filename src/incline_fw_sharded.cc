@@ -171,6 +171,7 @@ incline_fw_sharded::manager::get_writer_for(const incline_def_sharded* def,
     }
   }
   assert(0);
+  return NULL;
 }
 
 incline_fw_sharded::incline_fw_sharded(manager* mgr,

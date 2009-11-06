@@ -4,6 +4,9 @@
 #include "incline_fw_replicator.h"
 #include "incline_mgr.h"
 #include "start_thread.h"
+#ifdef WIN32
+#  include "incline_win32.h"
+#endif
 
 using namespace std;
 

@@ -1,6 +1,10 @@
+#ifdef WIN32
+#  include <windows.h>
+#else
 extern "C" {
-#include <sys/stat.h>
+#  include <sys/stat.h>
 }
+#endif
 #include <cassert>
 #include <fstream>
 #include <sstream>
@@ -12,6 +16,9 @@ extern "C" {
 #include "incline_fw_replicator.h"
 #include "incline_mgr.h"
 #include "incline_util.h"
+#ifdef WIN32
+#  include "incline_win32.h"
+#endif
 
 using namespace std;
 
@@ -167,7 +174,7 @@ namespace incline_driver_sharded_ns {
     }
     virtual incline_driver_sharded::connect_params
     get_connect_params_for(const string& key) const {
-      return connect_params_[str_to_key_type<long long>()(key)
+      return connect_params_[size_t(str_to_key_type<long long>()(key))
 			     % connect_params_.size()];
     }
     virtual string build_expr_for(const string& column_expr, const string& host,
@@ -322,15 +329,30 @@ incline_driver_sharded::rule::should_exit_loop() const
   return _get_file_mtime() != file_mtime_;
 }
 
-time_t
+unsigned long long
 incline_driver_sharded::rule::_get_file_mtime() const
 {
+  if (file_.empty()) {
+    return 0;
+  }
+#ifdef WIN32
+  WIN32_FIND_DATAA fdata;
+  HANDLE fh = FindFirstFileA(file_.c_str(), &fdata);
+  if (fh == INVALID_HANDLE_VALUE) {
+    return 0;
+  }
+  FindClose(fh);
+  assert(fdata.ftLastWriteTime.dwHighDateTime != 0);
+  return (unsigned long long)fdata.ftLastWriteTime.dwHighDateTime << 32
+    | (unsigned long long)fdata.ftLastWriteTime.dwLowDateTime;
+#else
   struct stat st;
-  if (file_.empty() || lstat(file_.c_str(), &st) != 0) {
+  if (lstat(file_.c_str(), &st) != 0) {
     return 0;
   }
   assert(st.st_mtime != 0); // we use mtime==0 to indicate error
   return st.st_mtime;
+#endif
 }
 
 string
@@ -542,6 +564,7 @@ incline_driver_sharded::is_src_host_of(const incline_def_sharded* def) const
     return rrl->source().host == cur_host_ && rrl->source().port == cur_port_;
   }
   assert(0);
+  return false;
 }
 
 bool

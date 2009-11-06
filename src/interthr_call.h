@@ -43,7 +43,7 @@ extern "C" {
 #include "cac/cac_mutex.h"
 
 template <typename Handler, typename Request>
-struct interthr_call_t {
+class interthr_call_t {
 public:
   class call_info_t {
     friend class interthr_call_t<Handler, Request>;
