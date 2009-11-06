@@ -29,6 +29,10 @@
 #define interthr_call_h
 
 extern "C" {
+#ifdef WIN32
+#else
+#  include <alloca.h>
+#endif
 #include <pthread.h>
 }
 #include <algorithm>
@@ -161,7 +165,15 @@ public:
       handler->call(*request);
       return;
     }
-    call_info_t* ci = new call_info_t [remain];
+    call_info_t* ci
+      = static_cast<call_info_t*>(
+#ifdef WIN32
+				  malloc
+#else
+				  alloca
+#endif
+				  (sizeof(call_info_t) * remain));
+    assert(ci != NULL);
     pthread_cond_t ret_cond;
     pthread_cond_init(&ret_cond, NULL);
     for (Iter it = first; it != last; ++it, ++ci) {
@@ -178,7 +190,9 @@ public:
     }
     pthread_mutex_unlock(&multi_mutex_);
     pthread_cond_destroy(&ret_cond);
-    delete [] ci;
+#ifdef WIN32
+    free(ci);
+#endif
   }
 };
 
