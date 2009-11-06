@@ -2,6 +2,14 @@
 #include <cstdarg>
 #include "incline_util.h"
 
+#ifdef _MSC_VER
+#  define SNPRINTF _snprintf_s
+#  pragma warning(push)
+#  pragma warning(disable : 4244) /* conversion from int to char */
+#else
+#  define SNPRINTF snprintf
+#endif
+
 using namespace std;
 
 incline_util::filter_func_t::~filter_func_t()
@@ -62,7 +70,7 @@ incline_util::filter(const char* fmt, int idx, size_t n, ...)
 	r += repl[(size_t)(*fi - '1')];
       } else if (*fi == 'I') {
 	char buf[16];
-	sprintf(buf, "%d", idx);
+	SNPRINTF(buf, sizeof(buf), "%d", idx);
 	r += buf;
       } else {
 	r.push_back(*fi);

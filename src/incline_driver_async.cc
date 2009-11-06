@@ -113,4 +113,5 @@ incline_driver_async::do_build_direct_expr(const incline_def_async* def,
 {
   // does not support mixed-mode unless overridden
   assert(0);
+  return string();
 }
