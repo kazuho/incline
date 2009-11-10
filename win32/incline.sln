@@ -1,21 +1,18 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 9.00
-# Visual C++ Express 2005
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "incline", "incline.vcproj", "{D455B920-6C6C-4644-950A-71AF92F2E88E}"
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "incline", "incline.vcproj", "{20B4B950-0242-4C19-8F80-BF972EF2C795}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|Win32 = Debug|Win32
 		MySQL Debug|Win32 = MySQL Debug|Win32
-		Release|Win32 = Release|Win32
+		MySQL Release|Win32 = MySQL Release|Win32
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{D455B920-6C6C-4644-950A-71AF92F2E88E}.Debug|Win32.ActiveCfg = Debug|Win32
-		{D455B920-6C6C-4644-950A-71AF92F2E88E}.Debug|Win32.Build.0 = Debug|Win32
-		{D455B920-6C6C-4644-950A-71AF92F2E88E}.MySQL Debug|Win32.ActiveCfg = MySQL Debug|Win32
-		{D455B920-6C6C-4644-950A-71AF92F2E88E}.MySQL Debug|Win32.Build.0 = MySQL Debug|Win32
-		{D455B920-6C6C-4644-950A-71AF92F2E88E}.Release|Win32.ActiveCfg = Release|Win32
-		{D455B920-6C6C-4644-950A-71AF92F2E88E}.Release|Win32.Build.0 = Release|Win32
+		{20B4B950-0242-4C19-8F80-BF972EF2C795}.MySQL Debug|Win32.ActiveCfg = MySQL Release|Win32
+		{20B4B950-0242-4C19-8F80-BF972EF2C795}.MySQL Debug|Win32.Build.0 = MySQL Release|Win32
+		{20B4B950-0242-4C19-8F80-BF972EF2C795}.MySQL Release|Win32.ActiveCfg = MySQL Debug|Win32
+		{20B4B950-0242-4C19-8F80-BF972EF2C795}.MySQL Release|Win32.Build.0 = MySQL Debug|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

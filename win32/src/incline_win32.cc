@@ -10,9 +10,9 @@ void iw32_sleep(unsigned int seconds)
 }
 
 struct iw32_thread_start {
-  void (*start_routine)(void*);
+  void* (*start_routine)(void*);
   void* arg;
-  iw32_thread_start(void (*r)(void*), void* a) : start_routine(r), arg(a) {}
+  iw32_thread_start(void* (*r)(void*), void* a) : start_routine(r), arg(a) {}
 };
 
 static unsigned __stdcall start_cb(void* _ts)
@@ -24,7 +24,7 @@ static unsigned __stdcall start_cb(void* _ts)
   return 0;
 }
 
-int iw32_pthread_create(HANDLE* thread, const void* _unused, void (*start_routine)(void*), void* arg)
+int iw32_pthread_create(HANDLE* thread, const void* _unused, void* (*start_routine)(void*), void* arg)
 {
   assert(_unused == NULL);
   iw32_thread_start* ts = new iw32_thread_start(start_routine, arg);
