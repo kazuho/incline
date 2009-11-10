@@ -2,6 +2,10 @@
 #include "incline_util.h"
 #include "incline_pgsql.h"
 
+#ifdef WIN32
+#  define strtoll _strtoi64
+#endif
+
 using namespace std;
 
 #define THROW_PQ_ERROR(dbh) throw error_t(PQerrorMessage(dbh))
