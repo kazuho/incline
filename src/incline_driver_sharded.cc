@@ -1,13 +1,15 @@
-#ifdef WIN32
-#  include <windows.h>
-#else
-extern "C" {
-#  include <sys/stat.h>
-}
-#endif
 #include <cassert>
 #include <fstream>
 #include <sstream>
+extern "C" {
+#include <time.h>
+#ifdef WIN32
+#  include "incline_win32.h"
+#else
+#  include <pthread.h>
+#  include <sys/stat.h>
+#endif
+}
 #include "start_thread.h"
 #include "incline_dbms.h"
 #include "incline_def_sharded.h"

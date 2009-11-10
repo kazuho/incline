@@ -1,7 +1,6 @@
 #ifndef incline_driver_sharded_h
 #define incline_driver_sharded_h
 
-#include "interthr_call.h"
 #include "incline_driver_async_qtable.h"
 
 class incline_def_sharded;

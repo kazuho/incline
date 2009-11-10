@@ -1,3 +1,6 @@
+extern "C" {
+#include <time.h>
+}
 #include "incline_dbms.h"
 #include "incline_def_sharded.h"
 #include "incline_driver_sharded.h"

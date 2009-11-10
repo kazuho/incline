@@ -1,3 +1,10 @@
+extern "C" {
+#ifdef WIN32
+#  include "incline_win32.h"
+#else
+#  include <pthread.h>
+#endif
+}
 #include "incline_dbms.h"
 #include "incline_def_async_qtable.h"
 #include "incline_driver_async_qtable.h"

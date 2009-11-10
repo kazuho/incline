@@ -1,9 +1,6 @@
 #ifndef start_thread_h
 #define start_thread_h
 
-extern "C" {
-#include <pthread.h>
-}
 #include <memory>
 
 template <typename T> struct start_thread_t {

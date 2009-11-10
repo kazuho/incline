@@ -33,7 +33,6 @@ extern "C" {
 #else
 #  include <alloca.h>
 #endif
-#include <pthread.h>
 }
 #include <algorithm>
 #include <cassert>
@@ -41,6 +40,14 @@ extern "C" {
 #include <vector>
 #include <map>
 #include "cac/cac_mutex.h"
+
+  // we need a wrapper class, since win32 critital section does not have an equiv. of PTHREAD_MUTEX_INITIALIZER
+struct interthr_call_mutex_t {
+  pthread_mutex_t m_;
+  interthr_call_mutex_t() { pthread_mutex_init(&m_, NULL); }
+  ~interthr_call_mutex_t() { /* intentionally left blank */ }
+  pthread_mutex_t* operator&() { return &m_; }
+};
 
 template <typename Handler, typename Request>
 class interthr_call_t {
@@ -153,7 +160,7 @@ protected:
     return *handle_slot;
   }
 protected:
-  static pthread_mutex_t multi_mutex_;
+  static interthr_call_mutex_t multi_mutex_;
 public:
   template <typename Iter> static void call(const Iter& first, const Iter& last) {
     size_t remain = std::distance(first, last);
@@ -197,7 +204,7 @@ public:
 };
 
 template<typename Handler, typename Request>
-pthread_mutex_t interthr_call_t<Handler, Request>::multi_mutex_ = PTHREAD_MUTEX_INITIALIZER;
+interthr_call_mutex_t interthr_call_t<Handler, Request>::multi_mutex_;
 
 #ifdef TEST_INTERTHR_CALL
 

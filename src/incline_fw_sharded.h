@@ -1,8 +1,16 @@
 #ifndef incline_fw_sharded_h
 #define incline_fw_sharded_h
 
+extern "C" {
+#ifdef WIN32
+#  include "incline_win32.h"
+#else
+#  include <pthread.h>
+#endif
+}
 #include "incline_driver_sharded.h"
 #include "incline_fw_async_qtable.h"
+#include "interthr_call.h"
 
 class incline_fw_sharded : public incline_fw_async_qtable {
 public:
