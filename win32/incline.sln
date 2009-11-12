@@ -6,19 +6,31 @@ EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		MySQL Debug|Win32 = MySQL Debug|Win32
+		MySQL Debug|x64 = MySQL Debug|x64
 		MySQL Release|Win32 = MySQL Release|Win32
+		MySQL Release|x64 = MySQL Release|x64
 		PostgreSQL Debug|Win32 = PostgreSQL Debug|Win32
+		PostgreSQL Debug|x64 = PostgreSQL Debug|x64
 		PostgreSQL Release|Win32 = PostgreSQL Release|Win32
+		PostgreSQL Release|x64 = PostgreSQL Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{20B4B950-0242-4C19-8F80-BF972EF2C795}.MySQL Debug|Win32.ActiveCfg = MySQL Release|Win32
 		{20B4B950-0242-4C19-8F80-BF972EF2C795}.MySQL Debug|Win32.Build.0 = MySQL Release|Win32
+		{20B4B950-0242-4C19-8F80-BF972EF2C795}.MySQL Debug|x64.ActiveCfg = MySQL Debug|x64
+		{20B4B950-0242-4C19-8F80-BF972EF2C795}.MySQL Debug|x64.Build.0 = MySQL Debug|x64
 		{20B4B950-0242-4C19-8F80-BF972EF2C795}.MySQL Release|Win32.ActiveCfg = MySQL Debug|Win32
 		{20B4B950-0242-4C19-8F80-BF972EF2C795}.MySQL Release|Win32.Build.0 = MySQL Debug|Win32
+		{20B4B950-0242-4C19-8F80-BF972EF2C795}.MySQL Release|x64.ActiveCfg = MySQL Release|x64
+		{20B4B950-0242-4C19-8F80-BF972EF2C795}.MySQL Release|x64.Build.0 = MySQL Release|x64
 		{20B4B950-0242-4C19-8F80-BF972EF2C795}.PostgreSQL Debug|Win32.ActiveCfg = PostgreSQL Debug|Win32
 		{20B4B950-0242-4C19-8F80-BF972EF2C795}.PostgreSQL Debug|Win32.Build.0 = PostgreSQL Debug|Win32
+		{20B4B950-0242-4C19-8F80-BF972EF2C795}.PostgreSQL Debug|x64.ActiveCfg = PostgreSQL Debug|x64
+		{20B4B950-0242-4C19-8F80-BF972EF2C795}.PostgreSQL Debug|x64.Build.0 = PostgreSQL Debug|x64
 		{20B4B950-0242-4C19-8F80-BF972EF2C795}.PostgreSQL Release|Win32.ActiveCfg = PostgreSQL Release|Win32
 		{20B4B950-0242-4C19-8F80-BF972EF2C795}.PostgreSQL Release|Win32.Build.0 = PostgreSQL Release|Win32
+		{20B4B950-0242-4C19-8F80-BF972EF2C795}.PostgreSQL Release|x64.ActiveCfg = PostgreSQL Release|x64
+		{20B4B950-0242-4C19-8F80-BF972EF2C795}.PostgreSQL Release|x64.Build.0 = PostgreSQL Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
