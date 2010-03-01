@@ -54,7 +54,7 @@ The tutorial explains how to create a microblog service (like twitter) running o
 At least four tables are needed to create a microblog service on database shards.  Instead of a single table representing follower E<lt>=E<gt> followee relationship, each user needs to have a list of followers (or list of following users) to him / her on his / her database shard.  Also, each user need to have his / her `timeline' table on his / her shard (or else the service would not scale out).  The example below is a minimal schema on MySQL.  All shards should have the same schema applied.  Two tables, `following' and `tweet' will be modified by the application.  `Follower' and `timeline' tables will be automatically kept (eventually) in sync by incline with the former two tables.
 
     CREATE TABLE following (
-      userer_id INT UNSIGNED NOT NULL,
+      user_id INT UNSIGNED NOT NULL,
       following_id INT UNSIGNED NOT NULL,
       PRIMARY KEY (user_id,following_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -62,7 +62,7 @@ At least four tables are needed to create a microblog service on database shards
     CREATE TABLE follower (
       user_id INT UNSIGNED NOT NULL,
       follower_id INT UNSIGNED NOT NULL,
-      PRIMARY KEY (user,following_id)
+      PRIMARY KEY (user_id,following_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
     CREATE TABLE tweet (
@@ -77,7 +77,7 @@ At least four tables are needed to create a microblog service on database shards
     CREATE TABLE timeline (
       user_id INT UNSIGNED NOT NULL,
       tweet_user_id INT UNSIGNED NOT NULL,
-      tweet_id INT UNSIGEND NOT NULL,
+      tweet_id INT UNSIGNED NOT NULL,
       creation_time TIMESTAMP NOT NULL,
       PRIMARY KEY (user_id,creation_time,tweet_user_id,tweet_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -184,7 +184,7 @@ To transfer modifications between database shards, forwarders should be run atta
 
     % incline --rdbms=mysql --database=microblog --host=10.1.1.1 \
      --user=root --password=XXXXXXXX --mode=shard \
-     --source=replication.json --shard-source=shard.json forward
+     --source=replication.json forward
 
 You should automatically restart the forwarder when it exits (it exits under certain conditions, for example, when it loses connection to the attached shard, or when the shard definition is being updated).
 
@@ -295,10 +295,6 @@ The mode is for running incline on multiple database nodes (shards).  Updates th
 =item --source=replication_def.json
 
 replication definition to be used
-
-=item --shard-source=shard_def.json
-
-shard definition to be used.  Mandatory if --mode is set to `shard'.
 
 =item --forwarder-log-file=logfile
 
