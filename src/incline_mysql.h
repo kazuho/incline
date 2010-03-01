@@ -11,7 +11,6 @@ class incline_mysql : public incline_dbms {
 public:
   typedef incline_dbms super;
   struct factory : public super::factory {
-    typedef super::factory super;
     virtual ~factory() {}
     virtual incline_mysql* create(const std::string& host, unsigned short port, const std::string& user, const std::string& password);
     virtual unsigned short default_port() const { return 3306; }

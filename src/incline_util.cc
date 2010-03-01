@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cstdarg>
+#include <cstdio>
 #include "incline_util.h"
 #ifdef WIN32
 #  include "incline_win32.h"
