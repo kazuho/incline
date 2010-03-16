@@ -18,12 +18,12 @@ AC_ARG_WITH(mysql-config,
 	[MYSQL_CONFIG="$withval"])
 if test "$MYSQL_CONFIG" = "yes" -o -z "$MYSQL_CONFIG"
 then
-	MYSQL_CONFIG_PATH=`which mysql_config` 2> /dev/null
+	MYSQL_CONFIG_PATH=`which mysql_config 2> /dev/null`
 	if test "$MYSQL_CONFIG_PATH"
 	then
 		MYSQL_CONFIG="$MYSQL_CONFIG_PATH"
 	else
-		if "$MYSQL_CONFIG" = "yes"
+		if test "$MYSQL_CONFIG" = "yes"
 		then
 			AC_MSG_ERROR([could not find mysql_config])
 		fi
@@ -50,12 +50,12 @@ AC_ARG_WITH(pg-config,
         [PG_CONFIG="$withval"])
 if test "$PG_CONFIG" = "yes" -o -z "$PG_CONFIG"
 then
-	PG_CONFIG_PATH=`which pg_config` 2> /dev/null
+	PG_CONFIG_PATH=`which pg_config 2> /dev/null`
 	if test "$PG_CONFIG_PATH"
 	then
 		PG_CONFIG="$PG_CONFIG_PATH"
 	else
-		if "$PG_CONFIG" = "yes"
+		if test "$PG_CONFIG" = "yes"
 		then
 			AC_MSG_ERROR([could not find pg_config])
 		fi
