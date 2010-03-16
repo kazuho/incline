@@ -33,7 +33,7 @@ incline_driver_standalone::update_trigger_of(trigger_body& body,
 	  _build_insert_from_def(body, def, src_table, act_update);
 	}
       } else {
-	_build_update_merge_from_def(body, def, src_table);
+	_build_insert_from_def(body, def, src_table, act_update);
       }
     }
   }
