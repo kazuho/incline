@@ -20,8 +20,6 @@ my $db = init_db(
     },
 );
 
-plan tests => 16;
-
 my $dbh = DBI->connect($db->dsn)
     or die DBI->errstr;
 
@@ -41,6 +39,10 @@ ok(
     'create cal_by_user table',
 );
 
+# preload some data
+$dbh->do(q{INSERT INTO incline_cal (id,at_time,title) VALUES (1,100,'hola')});
+$dbh->do(q{INSERT INTO incline_cal_member (cal_id,user_id) VALUES (1,10),(1,11)});
+
 # load rules
 system(
     qw(src/incline),
@@ -52,16 +54,22 @@ system(
 # run tests
 my $cmpf = sub {
     return (
-        $dbh->selectall_arrayref('SELECT user_id,cal_id,at_time FROM incline_cal INNER JOIN incline_cal_member ON incline_cal.id=incline_cal_member.cal_id ORDER BY user_id,cal_id'),
         $dbh->selectall_arrayref('SELECT _user_id,_cal_id,_at_time FROM incline_cal_by_user ORDER BY _user_id,_cal_id'),
+        $dbh->selectall_arrayref('SELECT user_id,cal_id,at_time FROM incline_cal INNER JOIN incline_cal_member ON incline_cal.id=incline_cal_member.cal_id ORDER BY user_id,cal_id'),
     );
 };
+is(
+    $dbh->selectrow_arrayref('SELECT COUNT(*) FROM incline_cal_by_user')->[0],
+    0,
+);
+$dbh->do('UPDATE incline_cal SET id=last_insert_id(id)');
+is_deeply($cmpf->(), 'post sync check');
 ok(
-    $dbh->do(q{INSERT INTO incline_cal (id,at_time,title) VALUES (1,999,'hello')}),
+    $dbh->do(q{INSERT INTO incline_cal (id,at_time,title) VALUES (2,999,'hello')}),
     'insert into cal',
 );
 ok(
-    $dbh->do('INSERT INTO incline_cal_member (cal_id,user_id) VALUES (1,101),(1,102)'),
+    $dbh->do('INSERT INTO incline_cal_member (cal_id,user_id) VALUES (2,101),(1,102)'),
     'insert into cal_member',
 );
 is_deeply($cmpf->(), 'post insertion check');
@@ -80,4 +88,4 @@ is_deeply($cmpf->(), 'post deletion from master check');
 ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")
     for qw/incline_cal incline_cal_member incline_cal_by_user/;
 
-1;
+done_testing;

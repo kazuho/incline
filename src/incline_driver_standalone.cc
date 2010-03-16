@@ -214,7 +214,10 @@ incline_driver_standalone::_build_insert_from_def(trigger_body& body,
     incline_util::push_back(cond, *_cond);
   }
   
-  if (action == act_update && def->source().size() == 1) {
+  bool use_update = action == act_update
+    && ! incline_dbms::factory_->has_replace_into();
+  
+  if (use_update && action == act_update && def->source().size() == 1) {
     // use: UPDATE ... WHERE ...
     string sql = "UPDATE " + dest_table + " SET "
       + incline_util::join(",",
@@ -228,10 +231,8 @@ incline_driver_standalone::_build_insert_from_def(trigger_body& body,
     return;
   }
   
-  // use: SELECT (with for UPDATE if necessary)
+  // use: SELECT (with FOR UPDATE if necessary)
   string query;
-  bool use_update = action == act_update
-    && ! incline_dbms::factory_->has_replace_into();
   
   { // build query
     vector<string> src_cols;

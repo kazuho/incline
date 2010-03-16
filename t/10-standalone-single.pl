@@ -20,8 +20,6 @@ my $db = init_db(
     },
 );
 
-plan tests => 14;
-
 my $dbh = DBI->connect($db->dsn)
     or die $DBI::errstr;
 
@@ -41,6 +39,9 @@ ok(
     'create dest table',
 );
 
+# preload some data
+$dbh->do(q{INSERT INTO incline_src (message) VALUES ('hola'),('bonjour')});
+
 # load rules
 system(
     qw(src/incline),
@@ -56,6 +57,13 @@ my $cmpf = sub {
         $dbh->selectall_arrayref('SELECT * FROM incline_dest'),
     );
 };
+is(
+    $dbh->selectrow_arrayref('SELECT COUNT(*) FROM incline_dest')->[0],
+    0,
+    'no data',
+);
+$dbh->do('UPDATE incline_src SET id=last_insert_id(id)');
+is_deeply($cmpf->(), 'post synch check');
 ok(
     $dbh->do(q{INSERT INTO incline_src (message) VALUES ('hello')}),
     'insert',
@@ -81,4 +89,4 @@ is_deeply($cmpf->(), 'post delete check');
 ok($dbh->do("DROP TABLE IF EXISTS $_"), "drop $_")
     for qw/incline_dest incline_src/;
 
-1;
+done_testing;
