@@ -62,7 +62,7 @@ is(
     $dbh->selectrow_arrayref('SELECT COUNT(*) FROM incline_cal_by_user')->[0],
     0,
 );
-$dbh->do('UPDATE incline_cal SET id=last_insert_id(id)');
+$dbh->do('UPDATE incline_cal SET id=id');
 is_deeply($cmpf->(), 'post sync check');
 ok(
     $dbh->do(q{INSERT INTO incline_cal (id,at_time,title) VALUES (2,999,'hello')}),

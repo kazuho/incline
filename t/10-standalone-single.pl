@@ -62,7 +62,7 @@ is(
     0,
     'no data',
 );
-$dbh->do('UPDATE incline_src SET id=last_insert_id(id)');
+$dbh->do('UPDATE incline_src SET id=id');
 is_deeply($cmpf->(), 'post synch check');
 ok(
     $dbh->do(q{INSERT INTO incline_src (message) VALUES ('hello')}),

@@ -228,6 +228,13 @@ incline_driver_standalone::_build_insert_from_def(trigger_body& body,
 			   incline_util::filter("%2=%1",
 						incline_util::filter(incline_util::rewrite_prefix(def->source()[0] + '.', "NEW."), NULL, def->pk_columns())));
     body.stmt.push_back(sql);
+    body.stmt.push_back("IF NOT FOUND THEN\\");
+    body.stmt.push_back("INSERT INTO " + dest_table + " ("
+			+ incline_util::join(",", incline_util::filter("%2", def->columns()))
+			+ ") VALUES ("
+			+ incline_util::join(",", incline_util::filter(incline_util::rewrite_prefix(def->source()[0]+ '.', "NEW."), incline_util::filter("%1", def->columns())))
+			+ ')');
+    body.stmt.push_back("END IF");
     return;
   }
   
@@ -283,20 +290,37 @@ incline_driver_standalone::_build_insert_from_def(trigger_body& body,
     body.stmt.push_back(sql);
   } else {
     // postgresql
+    body.var.insert(pair<string, string>("srow", "RECORD"));
+    body.stmt.push_back("FOR srow IN " + query + " LOOP\\");
     string sql = "UPDATE " + dest_table + " SET "
       + incline_util::join(',', incline_util::filter("%2=srow._%2", def->npk_columns()));
     if (extra_columns != NULL) {
       sql += ","
 	+ incline_util::join(',',
-			     incline_util::filter("%1=%2", *extra_columns));
+			     incline_util::filter("%2=%1", *extra_columns));
     }
     sql += " WHERE "
       + incline_util::join(" AND ",
 			   incline_util::filter("%2=srow._%2",
 						def->pk_columns()));
-    body.var.insert(pair<string, string>("srow", "RECORD"));
-    body.stmt.push_back("FOR srow IN " + query + " LOOP\\");
     body.stmt.push_back(sql);
+    body.stmt.push_back("IF NOT FOUND THEN\\");
+    sql = "INSERT INTO " + dest_table + " ("
+      + incline_util::join(',', incline_util::filter("%2", def->columns()))
+      + (extra_columns != NULL
+	 ? ',' + incline_util::join(',',
+				    incline_util::filter("%2", *extra_columns))
+	 : "")
+      + ") VALUES ("
+      + incline_util::join(',',
+			   incline_util::filter("srow._%2", def->columns()))
+      + (extra_columns != NULL
+	 ? ',' + incline_util::join(',',
+				    incline_util::filter("%1", *extra_columns))
+	 : "")
+      + ')';
+    body.stmt.push_back(sql);
+    body.stmt.push_back("END IF");
     body.stmt.push_back("END LOOP");
   }
 }
